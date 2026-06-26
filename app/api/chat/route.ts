@@ -8,31 +8,40 @@ type ChatPayload = {
   autoPublish?: boolean;
 };
 
+function extractSourceUrl(text: string): string | null {
+  const urlMatch = text.match(
+    /(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=[^\s]+|youtu\.be\/[^\s]+|drive\.google\.com\/[^\s]+|dropbox\.com\/[^\s]+|[^\s]+))/i
+  );
+
+  return urlMatch?.[1] ?? null;
+}
+
 export async function POST(req: Request) {
   const body = (await req.json()) as ChatPayload;
   const messages = body.messages ?? [];
   const latestUser = [...messages].reverse().find((message) => message.role === "user");
   const userText = latestUser?.content ?? "";
+  const inferredSource = body.source || extractSourceUrl(userText) || "";
 
   const workflowParts: string[] = [];
 
-  if (body.source) {
+  if (inferredSource) {
     const project = await createOpusClipProject({
-      sourceUrl: body.source,
+      sourceUrl: inferredSource,
       caption: "Auto-created from uploaded source"
     });
     workflowParts.push(
       project.mode === "live"
         ? `Queued source with OpusClip (${project.status}).`
-        : project.message
+      : project.message
     );
   } else {
-    workflowParts.push("No source has been uploaded yet.");
+    workflowParts.push("No source was detected yet. Paste a YouTube link or upload an MP4.");
   }
 
-  if (body.autoPublish && body.source) {
+  if (body.autoPublish && inferredSource) {
     const publish = await publishOpusClipPost({
-      clipUrl: body.source,
+      clipUrl: inferredSource,
       caption: "Auto-generated caption",
       targetAccountId: "connected-account"
     });
