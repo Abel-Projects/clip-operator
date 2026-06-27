@@ -10,3 +10,6 @@ wrangler.jsonc
 tsconfig.tsbuildinfo
 .env.local
 .env*.local
+.deploy-app-password.txt
+.vercel
+.env*
