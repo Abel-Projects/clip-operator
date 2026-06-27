@@ -42,16 +42,23 @@ type Phase =
 
 type SourceMode = "link" | "upload";
 
-const PROVIDERS: { id: Provider; label: string; hint: string }[] = [
-  {
-    id: "opusclip",
-    label: "OpusClip",
-    hint: "Hosted OpusClip API"
-  },
+const PROVIDERS: {
+  id: Provider;
+  label: string;
+  hint: string;
+  logo: string;
+}[] = [
   {
     id: "wayinvideo",
     label: "WayinVideo",
-    hint: "WayinVideo AI clipping API"
+    hint: "WayinVideo AI clipping API",
+    logo: "/logos/wayinvideo.png"
+  },
+  {
+    id: "opusclip",
+    label: "OpusClip",
+    hint: "Hosted OpusClip API",
+    logo: "/logos/opusclip.png"
   }
 ];
 
@@ -73,7 +80,7 @@ function formatFileSize(bytes: number) {
 export default function ClipWorkbench() {
   const searchParams = useSearchParams();
   const initialProvider =
-    searchParams.get("provider") === "wayinvideo" ? "wayinvideo" : "opusclip";
+    searchParams.get("provider") === "opusclip" ? "opusclip" : "wayinvideo";
 
   const [provider, setProvider] = useState<Provider>(initialProvider);
   const [sourceMode, setSourceMode] = useState<SourceMode>("link");
@@ -555,7 +562,16 @@ export default function ClipWorkbench() {
             onClick={() => handleProviderChange(entry.id)}
             disabled={isBusy}
           >
-            <span className="opus-provider-name">{entry.label}</span>
+            <span className="opus-provider-head">
+              <img
+                src={`${basePath}${entry.logo}`}
+                alt=""
+                className="opus-provider-logo"
+                width={28}
+                height={28}
+              />
+              <span className="opus-provider-name">{entry.label}</span>
+            </span>
             <span className="opus-provider-hint">{entry.hint}</span>
           </button>
         ))}

@@ -318,13 +318,28 @@ button {
 
 .opus-provider-tab {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.02);
   color: var(--text);
+}
+
+.opus-provider-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.opus-provider-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .opus-provider-tab.active {
