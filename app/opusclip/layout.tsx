@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
-import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Clip Operator",
   description: "Turn long videos into short clips with OpusClip."
 };
 
-export default function RootLayout({
+export default function OpusClipLayout({
   children
 }: Readonly<{
-  children: ReactNode;
+  children: React.ReactNode;
 }>) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
+  return children;
 }

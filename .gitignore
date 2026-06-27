@@ -4,3 +4,8 @@ dist
 .DS_Store
 work/uploads
 *.log
+logs/
+.wrangler/
+tsconfig.tsbuildinfo
+.env.local
+.env*.local
