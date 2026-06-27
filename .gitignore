@@ -6,6 +6,7 @@ work/uploads
 *.log
 logs/
 .wrangler/
+wrangler.jsonc
 tsconfig.tsbuildinfo
 .env.local
 .env*.local

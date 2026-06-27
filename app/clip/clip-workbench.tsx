@@ -84,7 +84,8 @@ export default function ClipWorkbench() {
   const [errorMessage, setErrorMessage] = useState("");
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
 
-  const apiBase = `/api/${provider}`;
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  const apiBase = `${basePath}/api/${provider}`;
   const providerLabel = provider === "opusclip" ? "OpusClip" : "WayinVideo";
   const hasSource = sourceMode === "link" ? Boolean(videoUrl.trim()) : Boolean(selectedFile);
   const postedCount = postResults.filter((result) => result.ok).length;
@@ -136,9 +137,9 @@ export default function ClipWorkbench() {
     resetRunState();
   }
 
-  async function loadClips(id: string, wait: boolean) {
+  async function loadClips(id: string) {
     const response = await fetch(
-      `${apiBase}/clips?projectId=${encodeURIComponent(id)}${wait ? "&wait=1" : ""}`
+      `${apiBase}/clips?projectId=${encodeURIComponent(id)}`
     );
     const data = (await response.json()) as {
       ok?: boolean;
@@ -151,6 +152,26 @@ export default function ClipWorkbench() {
     }
 
     return data.clips ?? [];
+  }
+
+  async function pollClipsUntilReady(id: string) {
+    const maxAttempts = 40;
+    const intervalMs = 15_000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const nextClips = await loadClips(id);
+      if (nextClips.length > 0) {
+        return nextClips;
+      }
+
+      if (attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+    }
+
+    throw new Error(
+      "Clips are still processing. Use “Check if clips are ready” in a few minutes."
+    );
   }
 
   async function autoPostAll(id: string) {
@@ -190,7 +211,7 @@ export default function ClipWorkbench() {
     setPostResults([]);
     rememberProjectId(id);
 
-    const nextClips = await loadClips(id, false);
+    const nextClips = await loadClips(id);
     setClips(nextClips);
 
     if (nextClips.length === 0) {
@@ -329,7 +350,7 @@ export default function ClipWorkbench() {
       rememberProjectId(data.projectId);
       setPhase("processing");
 
-      const nextClips = await loadClips(data.projectId, true);
+      const nextClips = await pollClipsUntilReady(data.projectId);
       setClips(nextClips);
 
       if (nextClips.length === 0) {
@@ -367,7 +388,7 @@ export default function ClipWorkbench() {
     setErrorMessage("");
 
     try {
-      const nextClips = await loadClips(projectId, false);
+      const nextClips = await loadClips(projectId);
       setClips(nextClips);
 
       if (nextClips.length === 0) {

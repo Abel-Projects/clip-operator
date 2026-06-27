@@ -251,11 +251,21 @@ export async function publishClip(input: PublishClipInput): Promise<PublishClipR
       })
     });
 
+    const body = await response.text();
+    if (response.ok) {
+      return {
+        ok: true as const,
+        mode: "live" as const,
+        status: response.status,
+        body
+      };
+    }
+
     return {
-      ok: response.ok,
-      mode: "live",
-      status: response.status,
-      body: await response.text()
+      ok: false as const,
+      mode: "live" as const,
+      message: body,
+      status: response.status
     };
   } catch (error) {
     return {

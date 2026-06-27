@@ -1,16 +1,5 @@
-import { Suspense } from "react";
-import ClipWorkbench from "./clip-workbench";
+import { redirect } from "next/navigation";
 
-export default function ClipPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="opus-page">
-          <p className="opus-hint">Loading…</p>
-        </main>
-      }
-    >
-      <ClipWorkbench />
-    </Suspense>
-  );
+export default function ClipLegacyPathPage() {
+  redirect("/");
 }

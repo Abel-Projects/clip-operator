@@ -6,9 +6,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "openshorts": "powershell -ExecutionPolicy Bypass -File scripts/start-openshorts.ps1",
     "bootstrap": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap-all.ps1",
@@ -28,6 +28,7 @@
     "@vitejs/plugin-rsc": "0.5.26",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
+    "react-server-dom-webpack": "^19.2.7",
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
