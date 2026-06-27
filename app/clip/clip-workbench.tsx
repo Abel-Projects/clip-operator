@@ -1,7 +1,13 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import {
+  authFetch,
+  clearSitePassword,
+  getStoredSitePassword,
+  storeSitePassword
+} from "@/lib/client-auth";
 
 type Provider = "opusclip" | "wayinvideo";
 
@@ -83,6 +89,9 @@ export default function ClipWorkbench() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
+  const [needsPassword, setNeedsPassword] = useState(false);
+  const [sitePassword, setSitePassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
   const apiBase = `${basePath}/api/${provider}`;
@@ -100,17 +109,62 @@ export default function ClipWorkbench() {
   const isBusy =
     phase === "submitting" || phase === "processing" || phase === "posting";
 
+  const loadIntegration = useCallback(async () => {
+    const response = await authFetch(`${apiBase}/config`);
+
+    if (response.status === 401) {
+      setNeedsPassword(true);
+      setIntegration(null);
+      return;
+    }
+
+    setNeedsPassword(false);
+    const data = (await response.json()) as IntegrationStatus;
+    setIntegration(data);
+  }, [apiBase]);
+
   useEffect(() => {
-    void fetch(`${apiBase}/config`)
-      .then((response) => response.json())
-      .then((data: IntegrationStatus) => setIntegration(data))
-      .catch(() =>
+    if (getStoredSitePassword()) {
+      void loadIntegration().catch(() =>
         setIntegration({
           configured: false,
           hasTikTokAccount: false
         })
       );
-  }, [apiBase]);
+      return;
+    }
+
+    void loadIntegration().catch(() => {
+      setNeedsPassword(true);
+      setIntegration({
+        configured: false,
+        hasTikTokAccount: false
+      });
+    });
+  }, [loadIntegration]);
+
+  async function handleUnlockSite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPasswordError("");
+
+    const password = sitePassword.trim();
+    if (!password) {
+      return;
+    }
+
+    storeSitePassword(password);
+
+    const response = await authFetch(`${apiBase}/config`);
+    if (response.status === 401) {
+      clearSitePassword();
+      setPasswordError("Wrong password.");
+      return;
+    }
+
+    setNeedsPassword(false);
+    setSitePassword("");
+    await loadIntegration();
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem(`clip-operator:lastProject:${provider}`);
@@ -138,7 +192,7 @@ export default function ClipWorkbench() {
   }
 
   async function loadClips(id: string) {
-    const response = await fetch(
+    const response = await authFetch(
       `${apiBase}/clips?projectId=${encodeURIComponent(id)}`
     );
     const data = (await response.json()) as {
@@ -175,7 +229,7 @@ export default function ClipWorkbench() {
   }
 
   async function autoPostAll(id: string) {
-    const response = await fetch(`${apiBase}/auto-publish`, {
+    const response = await authFetch(`${apiBase}/auto-publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId: id })
@@ -219,7 +273,7 @@ export default function ClipWorkbench() {
     }
 
     if (!integration?.hasTikTokAccount) {
-      const configResponse = await fetch(`${apiBase}/config`);
+      const configResponse = await authFetch(`${apiBase}/config`);
       const configData = (await configResponse.json()) as IntegrationStatus;
       setIntegration(configData);
 
@@ -291,7 +345,7 @@ export default function ClipWorkbench() {
         formData.append("projectName", topicList.join(", "));
       }
 
-      const response = await fetch(`${apiBase}/project`, {
+      const response = await authFetch(`${apiBase}/project`, {
         method: "POST",
         body: formData
       });
@@ -316,7 +370,7 @@ export default function ClipWorkbench() {
             projectName: topicList.join(", ") || undefined
           };
 
-    const response = await fetch(`${apiBase}/project`, {
+    const response = await authFetch(`${apiBase}/project`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
@@ -358,7 +412,7 @@ export default function ClipWorkbench() {
         return;
       }
 
-      const configResponse = await fetch(`${apiBase}/config`);
+      const configResponse = await authFetch(`${apiBase}/config`);
       const configData = (await configResponse.json()) as IntegrationStatus;
       setIntegration(configData);
 
@@ -396,7 +450,7 @@ export default function ClipWorkbench() {
         return;
       }
 
-      const configResponse = await fetch(`${apiBase}/config`);
+      const configResponse = await authFetch(`${apiBase}/config`);
       const configData = (await configResponse.json()) as IntegrationStatus;
       setIntegration(configData);
 
@@ -466,6 +520,30 @@ export default function ClipWorkbench() {
         </p>
       </section>
 
+      {needsPassword ? (
+        <form className="opus-panel opus-resume" onSubmit={handleUnlockSite}>
+          <h3>Password required</h3>
+          <p className="opus-hint">This tool is private. Enter the site password to continue.</p>
+          <label className="opus-label" htmlFor="site-password">
+            Password
+          </label>
+          <input
+            id="site-password"
+            className="opus-input"
+            type="password"
+            value={sitePassword}
+            onChange={(event) => setSitePassword(event.target.value)}
+            autoComplete="current-password"
+          />
+          {passwordError ? <p className="opus-error">{passwordError}</p> : null}
+          <button type="submit" className="opus-cta" disabled={!sitePassword.trim()}>
+            Unlock
+          </button>
+        </form>
+      ) : null}
+
+      {!needsPassword ? (
+        <>
       <div className="opus-provider-toggle" role="tablist" aria-label="API provider">
         {PROVIDERS.map((entry) => (
           <button
@@ -786,6 +864,8 @@ export default function ClipWorkbench() {
             })}
           </div>
         </div>
+      ) : null}
+        </>
       ) : null}
     </main>
   );

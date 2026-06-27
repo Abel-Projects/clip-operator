@@ -10,7 +10,7 @@ function unauthorized(): NextResponse {
   });
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const password = process.env.APP_PASSWORD?.trim();
   if (!password) {
     return NextResponse.next();
