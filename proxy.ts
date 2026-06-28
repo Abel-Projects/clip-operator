@@ -1,13 +1,10 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-function unauthorized(): NextResponse {
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Basic realm="Clip Operator"'
-    }
-  });
+function unauthorizedApi(): NextResponse {
+  // No WWW-Authenticate header — avoids the browser's native login dialog.
+  // The workbench unlock form sends Authorization on API calls instead.
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
 export function proxy(request: NextRequest) {
@@ -16,9 +13,13 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (!request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Basic ")) {
-    return unauthorized();
+    return unauthorizedApi();
   }
 
   const encoded = authorization.slice("Basic ".length);
@@ -27,7 +28,7 @@ export function proxy(request: NextRequest) {
   try {
     decoded = atob(encoded);
   } catch {
-    return unauthorized();
+    return unauthorizedApi();
   }
 
   const separator = decoded.indexOf(":");
@@ -35,7 +36,7 @@ export function proxy(request: NextRequest) {
     separator >= 0 ? decoded.slice(separator + 1) : decoded;
 
   if (suppliedPassword !== password) {
-    return unauthorized();
+    return unauthorizedApi();
   }
 
   return NextResponse.next();
