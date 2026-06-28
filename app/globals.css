@@ -271,6 +271,35 @@ button {
   gap: 24px;
 }
 
+.opus-page-auth {
+  justify-content: center;
+}
+
+.opus-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.opus-auth h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .opus-topbar {
   display: flex;
   align-items: center;

@@ -124,7 +124,7 @@ export default function ClipWorkbench() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
-  const [needsPassword, setNeedsPassword] = useState(false);
+  const [siteUnlocked, setSiteUnlocked] = useState(false);
   const [sitePassword, setSitePassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
@@ -150,12 +150,12 @@ export default function ClipWorkbench() {
     const response = await authFetch(`${apiBase}/config`);
 
     if (response.status === 401) {
-      setNeedsPassword(true);
+      setSiteUnlocked(false);
       setIntegration(null);
       return;
     }
 
-    setNeedsPassword(false);
+    setSiteUnlocked(true);
     const data = (await response.json()) as IntegrationStatus;
     setIntegration(data);
   }, [apiBase]);
@@ -172,7 +172,7 @@ export default function ClipWorkbench() {
     }
 
     void loadIntegration().catch(() => {
-      setNeedsPassword(true);
+      setSiteUnlocked(false);
       setIntegration({
         configured: false,
         hasTikTokAccount: false
@@ -198,7 +198,7 @@ export default function ClipWorkbench() {
       return;
     }
 
-    setNeedsPassword(false);
+    setSiteUnlocked(true);
     setSitePassword("");
     await loadIntegration();
   }
@@ -557,6 +557,29 @@ export default function ClipWorkbench() {
     ? `Run ${providerLabel} → TikTok`
     : `Run ${providerLabel}`;
 
+  if (!siteUnlocked) {
+    return (
+      <main className="opus-page opus-page-auth">
+        <form className="opus-auth" onSubmit={handleUnlockSite}>
+          <h1>Password required</h1>
+          <input
+            className="opus-input"
+            type="password"
+            value={sitePassword}
+            onChange={(event) => setSitePassword(event.target.value)}
+            autoComplete="current-password"
+            autoFocus
+            aria-label="Password"
+          />
+          {passwordError ? <p className="opus-error">{passwordError}</p> : null}
+          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
+            Continue
+          </button>
+        </form>
+      </main>
+    );
+  }
+
   return (
     <main className="opus-page">
       <header className="opus-topbar">
@@ -573,30 +596,7 @@ export default function ClipWorkbench() {
         </p>
       </section>
 
-      {needsPassword ? (
-        <form className="opus-panel opus-resume" onSubmit={handleUnlockSite}>
-          <h3>Password required</h3>
-          <p className="opus-hint">This tool is private. Enter the site password to continue.</p>
-          <label className="opus-label" htmlFor="site-password">
-            Password
-          </label>
-          <input
-            id="site-password"
-            className="opus-input"
-            type="password"
-            value={sitePassword}
-            onChange={(event) => setSitePassword(event.target.value)}
-            autoComplete="current-password"
-          />
-          {passwordError ? <p className="opus-error">{passwordError}</p> : null}
-          <button type="submit" className="opus-cta" disabled={!sitePassword.trim()}>
-            Unlock
-          </button>
-        </form>
-      ) : null}
-
-      {!needsPassword ? (
-        <>
+      <>
       <div className="opus-provider-toggle" role="tablist" aria-label="API provider">
         {PROVIDERS.map((entry) => (
           <button
@@ -955,8 +955,7 @@ export default function ClipWorkbench() {
           </div>
         </div>
       ) : null}
-        </>
-      ) : null}
+      </>
     </main>
   );
 }
