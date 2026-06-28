@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "openshorts": "powershell -ExecutionPolicy Bypass -File scripts/start-openshorts.ps1",
+    "supoclip": "powershell -ExecutionPolicy Bypass -File scripts/start-supoclip.ps1",
     "bootstrap": "powershell -ExecutionPolicy Bypass -File scripts/bootstrap-all.ps1",
     "setup": "pnpm install"
   },

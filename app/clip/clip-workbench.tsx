@@ -9,7 +9,7 @@ import {
   storeSitePassword
 } from "@/lib/client-auth";
 
-type Provider = "opusclip" | "wayinvideo";
+type Provider = "opusclip" | "wayinvideo" | "supoclip";
 
 type IntegrationStatus = {
   configured: boolean;
@@ -47,20 +47,49 @@ const PROVIDERS: {
   label: string;
   hint: string;
   logo: string;
+  supportsTikTok: boolean;
 }[] = [
   {
     id: "wayinvideo",
     label: "WayinVideo",
     hint: "WayinVideo AI clipping API",
-    logo: "/logos/wayinvideo.png"
+    logo: "/logos/wayinvideo.png",
+    supportsTikTok: true
   },
   {
     id: "opusclip",
     label: "OpusClip",
     hint: "Hosted OpusClip API",
-    logo: "/logos/opusclip.png"
+    logo: "/logos/opusclip.png",
+    supportsTikTok: true
+  },
+  {
+    id: "supoclip",
+    label: "SupoClip",
+    hint: "Self-hosted open-source clipper",
+    logo: "/logos/supoclip.svg",
+    supportsTikTok: false
   }
 ];
+
+const PROVIDER_ENV_KEYS: Record<Provider, string> = {
+  opusclip: "OPUSCLIP_API_KEY",
+  wayinvideo: "WAYINVIDEO_API_KEY",
+  supoclip: "SUPOCLIP_USER_ID"
+};
+
+function parseInitialProvider(searchParams: URLSearchParams): Provider {
+  const requested = searchParams.get("provider");
+  if (
+    requested === "opusclip" ||
+    requested === "wayinvideo" ||
+    requested === "supoclip"
+  ) {
+    return requested;
+  }
+
+  return "wayinvideo";
+}
 
 function formatDuration(seconds?: number) {
   if (!seconds) return null;
@@ -79,8 +108,7 @@ function formatFileSize(bytes: number) {
 
 export default function ClipWorkbench() {
   const searchParams = useSearchParams();
-  const initialProvider =
-    searchParams.get("provider") === "opusclip" ? "opusclip" : "wayinvideo";
+  const initialProvider = parseInitialProvider(searchParams);
 
   const [provider, setProvider] = useState<Provider>(initialProvider);
   const [sourceMode, setSourceMode] = useState<SourceMode>("link");
@@ -102,7 +130,9 @@ export default function ClipWorkbench() {
 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
   const apiBase = `${basePath}/api/${provider}`;
-  const providerLabel = provider === "opusclip" ? "OpusClip" : "WayinVideo";
+  const providerMeta = PROVIDERS.find((entry) => entry.id === provider) ?? PROVIDERS[0];
+  const providerLabel = providerMeta.label;
+  const supportsTikTok = providerMeta.supportsTikTok;
   const hasSource = sourceMode === "link" ? Boolean(videoUrl.trim()) : Boolean(selectedFile);
   const postedCount = postResults.filter((result) => result.ok).length;
 
@@ -286,9 +316,12 @@ export default function ClipWorkbench() {
 
       if (!configData.hasTikTokAccount) {
         setPhase("ready");
-        throw new Error(
-          `Clips loaded, but no TikTok account was found in ${providerLabel}.`
-        );
+        if (supportsTikTok) {
+          throw new Error(
+            `Clips loaded, but no TikTok account was found in ${providerLabel}.`
+          );
+        }
+        return;
       }
     }
 
@@ -348,6 +381,10 @@ export default function ClipWorkbench() {
         if (clipDuration) {
           formData.append("clipDurationSec", String(clipDuration));
         }
+      } else if (provider === "supoclip") {
+        if (topicList.length > 0) {
+          formData.append("projectName", topicList.join(", "));
+        }
       } else if (topicList.length > 0) {
         formData.append("projectName", topicList.join(", "));
       }
@@ -372,10 +409,15 @@ export default function ClipWorkbench() {
             clipDurationSec: clipDuration,
             sourceLang: "auto"
           }
-        : {
-            videoUrl: videoUrl.trim(),
-            projectName: topicList.join(", ") || undefined
-          };
+        : provider === "supoclip"
+          ? {
+              videoUrl: videoUrl.trim(),
+              projectName: topicList.join(", ") || undefined
+            }
+          : {
+              videoUrl: videoUrl.trim(),
+              projectName: topicList.join(", ") || undefined
+            };
 
     const response = await authFetch(`${apiBase}/project`, {
       method: "POST",
@@ -425,9 +467,11 @@ export default function ClipWorkbench() {
 
       if (!configData.hasTikTokAccount) {
         setPhase("ready");
-        setErrorMessage(
-          `Clips are ready, but no TikTok account was found in ${providerLabel}.`
-        );
+        if (supportsTikTok) {
+          setErrorMessage(
+            `Clips are ready, but no TikTok account was found in ${providerLabel}.`
+          );
+        }
         return;
       }
 
@@ -508,8 +552,10 @@ export default function ClipWorkbench() {
       ? `Uploading your video to ${providerLabel}…`
       : `Sending to ${providerLabel}…`;
 
-  const envKey =
-    provider === "opusclip" ? "OPUSCLIP_API_KEY" : "WAYINVIDEO_API_KEY";
+  const envKey = PROVIDER_ENV_KEYS[provider];
+  const runLabel = supportsTikTok
+    ? `Run ${providerLabel} → TikTok`
+    : `Run ${providerLabel}`;
 
   return (
     <main className="opus-page">
@@ -522,8 +568,8 @@ export default function ClipWorkbench() {
       <section className="opus-intro">
         <h1>Compare clipping APIs side by side.</h1>
         <p>
-          Pick OpusClip or WayinVideo, paste a link or upload a file, and run the
-          same clip → caption → TikTok workflow on each.
+          Pick OpusClip, WayinVideo, or self-hosted SupoClip, paste a link or
+          upload a file, and compare the clip workflow side by side.
         </p>
       </section>
 
@@ -579,10 +625,21 @@ export default function ClipWorkbench() {
 
       {!integration?.configured ? (
         <p className="opus-alert">
-          Add {envKey} to `.env.local` and restart the dev server.
+          {provider === "supoclip" ? (
+            <>
+              Start SupoClip with <code>pnpm supoclip</code>, create an account at{" "}
+              <code>http://localhost:3107</code>, then add{" "}
+              <code>SUPOCLIP_USER_ID</code> and <code>SUPOCLIP_AUTH_SECRET</code> to{" "}
+              <code>.env.local</code>.
+            </>
+          ) : (
+            <>
+              Add {envKey} to <code>.env.local</code> and restart the dev server.
+            </>
+          )}
         </p>
       ) : null}
-      {integration?.configured && !integration.hasTikTokAccount ? (
+      {integration?.configured && supportsTikTok && !integration.hasTikTokAccount ? (
         <p className="opus-alert">
           Connect TikTok in your {providerLabel} dashboard to enable auto-posting.
         </p>
@@ -718,6 +775,11 @@ export default function ClipWorkbench() {
                     inputMode="numeric"
                   />
                 </>
+              ) : provider === "supoclip" ? (
+                <p className="opus-hint">
+                  SupoClip runs locally via Docker. Clips render with subtitles in
+                  fast mode by default.
+                </p>
               ) : (
                 <p className="opus-hint">
                   WayinVideo exports 9:16 clips with animated captions by default.
@@ -731,7 +793,7 @@ export default function ClipWorkbench() {
             className="opus-cta"
             disabled={!hasSource || !integration?.configured || isBusy}
           >
-            Run {providerLabel} → TikTok
+            {runLabel}
           </button>
         </form>
       ) : null}
@@ -745,7 +807,7 @@ export default function ClipWorkbench() {
             from the WayinVideo website URL.
           </p>
           <label className="opus-label" htmlFor="existing-project-id">
-            {provider === "wayinvideo" ? "API project ID or URL" : "Project ID"}
+            {provider === "wayinvideo" ? "API project ID or URL" : provider === "supoclip" ? "Task ID" : "Project ID"}
           </label>
           <input
             id="existing-project-id"
@@ -755,7 +817,9 @@ export default function ClipWorkbench() {
             placeholder={
               provider === "wayinvideo"
                 ? "prj06… or paste wayin.ai/wayinvideo/video/… URL"
-                : "P0000000..."
+                : provider === "supoclip"
+                  ? "SupoClip task UUID"
+                  : "P0000000..."
             }
           />
           <p className="opus-hint">
@@ -769,6 +833,14 @@ export default function ClipWorkbench() {
                 </a>{" "}
                 directly.
               </>
+            ) : provider === "supoclip" ? (
+              <>
+                Paste the SupoClip task ID returned by Clip Operator or from{" "}
+                <a href="http://localhost:3107" target="_blank" rel="noreferrer">
+                  the SupoClip UI
+                </a>
+                .
+              </>
             ) : (
               "Find it in your OpusClip dashboard project URL."
             )}
@@ -778,7 +850,7 @@ export default function ClipWorkbench() {
             className="opus-secondary"
             disabled={!existingProjectId.trim() || !integration?.configured || isBusy}
           >
-            Post existing clips to TikTok
+            {supportsTikTok ? "Post existing clips to TikTok" : "Load existing clips"}
           </button>
         </form>
       ) : null}
@@ -798,7 +870,9 @@ export default function ClipWorkbench() {
               ? "Generating captions and queueing each clip."
               : provider === "wayinvideo"
                 ? "WayinVideo finds viral moments, reframes to vertical, and renders captioned clips."
-                : "OpusClip transcribes the video, finds viral moments, and renders vertical clips with captions."}
+                : provider === "supoclip"
+                  ? "SupoClip transcribes locally, scores moments, and renders vertical clips with subtitles."
+                  : "OpusClip transcribes the video, finds viral moments, and renders vertical clips with captions."}
           </p>
           {projectId && phase !== "submitting" ? (
             <p className="opus-hint">Project: {projectId}</p>

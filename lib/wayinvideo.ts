@@ -58,7 +58,7 @@ export function wayinVideoWebsiteTaskMessage(taskId: string): string {
   return (
     `"${taskId}" is a WayinVideo website task ID (from the library URL), not an API project ID. ` +
     "Clip Operator can only load clips created via the API (ids like prj06… or proj_…). " +
-    "If you clipped from http://localhost:3000/clip, open that page in the same browser and check " +
+    "If you clipped from http://localhost:3000, open that page in the same browser and check " +
     "the saved ID in “Already have clips?” or run localStorage.getItem('clip-operator:lastProject:wayinvideo') " +
     "in DevTools. You can also post clips directly from the WayinVideo website calendar."
   );
