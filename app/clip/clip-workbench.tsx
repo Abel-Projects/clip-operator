@@ -586,6 +586,9 @@ export default function ClipWorkbench() {
         <div className="opus-brand">
           <span className="opus-logo">Clip Operator</span>
         </div>
+        <nav className="opus-nav">
+          <a href="/">Autopilot</a>
+        </nav>
       </header>
 
       <section className="opus-intro">

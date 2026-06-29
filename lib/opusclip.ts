@@ -24,6 +24,7 @@ export type OpusClipClip = {
   hashtags?: string;
   previewUrl?: string;
   durationSec?: number;
+  score?: number;
 };
 
 export type OpusClipProjectResult =
@@ -395,6 +396,21 @@ function parseClips(payload: unknown, projectId: string): OpusClipClip[] {
       parsed.hashtags = clip.hashtags;
     }
 
+    const scoreCandidate =
+      typeof clip.score === "number"
+        ? clip.score
+        : typeof clip.viralityScore === "number"
+          ? clip.viralityScore
+          : typeof clip.virality_score === "number"
+            ? clip.virality_score
+            : typeof clip.curatedScore === "number"
+              ? clip.curatedScore
+              : undefined;
+
+    if (typeof scoreCandidate === "number") {
+      parsed.score = scoreCandidate;
+    }
+
     return [parsed];
   });
 }
@@ -708,6 +724,57 @@ async function resolveClipCaption(
   return copy;
 }
 
+export async function publishOpusClipToTikTok(input: {
+  projectId: string;
+  clip: OpusClipClip;
+}): Promise<ClipPostResult> {
+  const config = getConfig();
+  if (!config) {
+    return {
+      clipId: input.clip.clipId,
+      ok: false,
+      message: "OPUSCLIP_API_KEY is not set."
+    };
+  }
+
+  const account = await resolveTikTokAccount();
+  if (!account) {
+    return {
+      clipId: input.clip.clipId,
+      ok: false,
+      message:
+        "No TikTok account found. Connect TikTok in OpusClip or set OPUSCLIP_POST_ACCOUNT_ID."
+    };
+  }
+
+  try {
+    const caption = await resolveClipCaption(input.projectId, input.clip, account);
+    const publish = await publishOpusClipPost({
+      projectId: input.projectId,
+      clipId: input.clip.clipId,
+      title: caption.title,
+      description: caption.description,
+      postAccountId: account.postAccountId,
+      subAccountId: account.subAccountId
+    });
+
+    return {
+      clipId: input.clip.clipId,
+      ok: publish.ok,
+      message: publish.ok
+        ? `Queued post for ${caption.title}`
+        : publish.message
+    };
+  } catch (error) {
+    return {
+      clipId: input.clip.clipId,
+      ok: false,
+      message:
+        error instanceof Error ? error.message : "Unexpected publish error."
+    };
+  }
+}
+
 export async function autoPostAllClipsToTikTok(input: {
   projectId: string;
   clips: OpusClipClip[];
@@ -742,32 +809,11 @@ export async function autoPostAllClipsToTikTok(input: {
   const results: ClipPostResult[] = [];
 
   for (const clip of input.clips) {
-    try {
-      const caption = await resolveClipCaption(input.projectId, clip, account);
-      const publish = await publishOpusClipPost({
-        projectId: input.projectId,
-        clipId: clip.clipId,
-        title: caption.title,
-        description: caption.description,
-        postAccountId: account.postAccountId,
-        subAccountId: account.subAccountId
-      });
-
-      results.push({
-        clipId: clip.clipId,
-        ok: publish.ok,
-        message: publish.ok
-          ? `Queued post for ${caption.title}`
-          : publish.message
-      });
-    } catch (error) {
-      results.push({
-        clipId: clip.clipId,
-        ok: false,
-        message:
-          error instanceof Error ? error.message : "Unexpected publish error."
-      });
-    }
+    const result = await publishOpusClipToTikTok({
+      projectId: input.projectId,
+      clip
+    });
+    results.push(result);
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
   }

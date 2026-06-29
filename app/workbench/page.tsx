@@ -1,9 +1,9 @@
 import { Suspense } from "react";
-import AutopilotDashboard from "./autopilot/autopilot-dashboard";
+import ClipWorkbench from "../clip/clip-workbench";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default function WorkbenchPage() {
   return (
     <Suspense
       fallback={
@@ -12,7 +12,7 @@ export default function HomePage() {
         </main>
       }
     >
-      <AutopilotDashboard />
+      <ClipWorkbench />
     </Suspense>
   );
 }

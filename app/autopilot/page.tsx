@@ -1,9 +1,9 @@
 import { Suspense } from "react";
-import AutopilotDashboard from "./autopilot/autopilot-dashboard";
+import AutopilotDashboard from "./autopilot-dashboard";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default function AutopilotPage() {
   return (
     <Suspense
       fallback={
