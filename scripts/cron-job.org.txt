@@ -1,0 +1,11 @@
+# Optional: external scheduler for autopilot (Hobby-friendly)
+# Calls clip-operator every 5 minutes. Requires CRON_SECRET on the app.
+#
+# 1. Sign up at https://cron-job.org (free)
+# 2. Create job:
+#    URL: https://clip-operator.vercel.app/api/cron/autopilot
+#    Method: POST
+#    Header: Authorization: Bearer <your CRON_SECRET>
+#    Schedule: every 5 minutes
+#
+# Vercel Pro can use vercel.json crons instead (see README).
