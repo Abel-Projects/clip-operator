@@ -2,6 +2,8 @@
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import PasswordGate from "@/app/components/password-gate";
+import SiteShell from "@/app/components/site-shell";
 import {
   authFetch,
   clearSitePassword,
@@ -559,43 +561,22 @@ export default function ClipWorkbench() {
 
   if (!siteUnlocked) {
     return (
-      <main className="opus-page opus-page-auth">
-        <form className="opus-auth" onSubmit={handleUnlockSite}>
-          <h1>Password required</h1>
-          <input
-            className="opus-input"
-            type="password"
-            value={sitePassword}
-            onChange={(event) => setSitePassword(event.target.value)}
-            autoComplete="current-password"
-            autoFocus
-            aria-label="Password"
-          />
-          {passwordError ? <p className="opus-error">{passwordError}</p> : null}
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
-            Continue
-          </button>
-        </form>
-      </main>
+      <PasswordGate
+        password={sitePassword}
+        error={passwordError}
+        onPasswordChange={setSitePassword}
+        onSubmit={handleUnlockSite}
+      />
     );
   }
 
   return (
-    <main className="opus-page">
-      <header className="opus-topbar">
-        <div className="opus-brand">
-          <span className="opus-logo">Clip Operator</span>
-        </div>
-        <nav className="opus-nav">
-          <a href="/">Autopilot</a>
-        </nav>
-      </header>
-
+    <SiteShell mode="manual">
       <section className="opus-intro">
         <h1>Compare clipping APIs side by side.</h1>
         <p>
-          Pick OpusClip, WayinVideo, or self-hosted SupoClip, paste a link or
-          upload a file, and compare the clip workflow side by side.
+          Pick OpusClip, WayinVideo, or SupoClip — paste a link or upload, then run the
+          workflow yourself.
         </p>
       </section>
 
@@ -959,6 +940,6 @@ export default function ClipWorkbench() {
         </div>
       ) : null}
       </>
-    </main>
+    </SiteShell>
   );
 }

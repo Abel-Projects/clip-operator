@@ -1,6 +1,12 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import MonitorSection, {
+  type MonitorPost,
+  type MonitorSummary
+} from "@/app/components/monitor-section";
+import PasswordGate from "@/app/components/password-gate";
+import SiteShell from "@/app/components/site-shell";
 import {
   authFetch,
   clearSitePassword,
@@ -69,6 +75,8 @@ export default function AutopilotDashboard() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [monitorPosts, setMonitorPosts] = useState<MonitorPost[]>([]);
+  const [monitorSummary, setMonitorSummary] = useState<MonitorSummary | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -76,12 +84,17 @@ export default function AutopilotDashboard() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const loadDashboard = useCallback(async () => {
-    const [campaignRes, settingsRes] = await Promise.all([
+    const [campaignRes, settingsRes, monitorRes] = await Promise.all([
       authFetch("/api/autopilot/campaigns"),
-      authFetch("/api/autopilot/settings")
+      authFetch("/api/autopilot/settings"),
+      authFetch("/api/autopilot/monitor")
     ]);
 
-    if (campaignRes.status === 401 || settingsRes.status === 401) {
+    if (
+      campaignRes.status === 401 ||
+      settingsRes.status === 401 ||
+      monitorRes.status === 401
+    ) {
       setSiteUnlocked(false);
       return;
     }
@@ -100,12 +113,20 @@ export default function AutopilotDashboard() {
       settings?: Settings;
     };
 
+    const monitorData = (await monitorRes.json()) as {
+      ok?: boolean;
+      posts?: MonitorPost[];
+      summary?: MonitorSummary;
+    };
+
     if (!campaignData.ok) {
       throw new Error(campaignData.message ?? "Could not load autopilot.");
     }
 
     setCampaigns(campaignData.campaigns ?? []);
     setSummary(campaignData.summary ?? null);
+    setMonitorPosts(monitorData.posts ?? []);
+    setMonitorSummary(monitorData.summary ?? null);
 
     if (settingsData.settings) {
       setSettings(settingsData.settings);
@@ -176,7 +197,7 @@ export default function AutopilotDashboard() {
       }
 
       setSourceUrl("");
-      setSuccessMessage("Video queued — autopilot will clip, pick the best moments, and schedule TikTok posts.");
+      setSuccessMessage("Queued — clipping and scheduling run in the background.");
       await loadDashboard();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Submit failed.");
@@ -202,46 +223,22 @@ export default function AutopilotDashboard() {
 
   if (!siteUnlocked) {
     return (
-      <main className="opus-page opus-page-auth">
-        <form className="opus-auth" onSubmit={handleUnlockSite}>
-          <h1>Password required</h1>
-          <input
-            className="opus-input"
-            type="password"
-            value={sitePassword}
-            onChange={(event) => setSitePassword(event.target.value)}
-            autoComplete="current-password"
-            autoFocus
-            aria-label="Password"
-          />
-          {passwordError ? <p className="opus-error">{passwordError}</p> : null}
-          <button type="submit" className="sr-only" tabIndex={-1} aria-hidden="true">
-            Continue
-          </button>
-        </form>
-      </main>
+      <PasswordGate
+        password={sitePassword}
+        error={passwordError}
+        onPasswordChange={setSitePassword}
+        onSubmit={handleUnlockSite}
+      />
     );
   }
 
   return (
-    <main className="opus-page">
-      <header className="opus-topbar">
-        <div className="opus-brand">
-          <span className="opus-logo">Clip Operator</span>
-          <span className="opus-tag">Autopilot</span>
-        </div>
-        <nav className="opus-nav">
-          <a href="/monitor">Monitor</a>
-          <a href="/workbench">Manual mode</a>
-        </nav>
-      </header>
-
+    <SiteShell mode="autopilot" wide>
       <section className="opus-intro">
         <h1>Paste a YouTube link. Autopilot handles the rest.</h1>
         <p>
-          OpusClip finds the best clips, schedules TikTok posts with safe spacing (default{" "}
-          {settings?.posts_per_day ?? 4}/day, {settings?.min_hours_between_posts ?? 3}h apart),
-          and runs in the background.
+          OpusClip finds clips, schedules TikTok posts ({settings?.posts_per_day ?? 4}/day
+          max, {settings?.min_hours_between_posts ?? 3}h apart).
         </p>
       </section>
 
@@ -267,7 +264,7 @@ export default function AutopilotDashboard() {
         </div>
         <div className="opus-stat">
           <span className="opus-stat-label">Next post</span>
-          <strong>{formatWhen(summary?.nextPostAt ?? null)}</strong>
+          <strong className="opus-stat-compact">{formatWhen(summary?.nextPostAt ?? null)}</strong>
         </div>
       </div>
 
@@ -275,23 +272,24 @@ export default function AutopilotDashboard() {
         <label className="opus-label" htmlFor="source-url">
           YouTube URL
         </label>
-        <input
-          id="source-url"
-          className="opus-input opus-input-lg"
-          value={sourceUrl}
-          onChange={(event) => setSourceUrl(event.target.value)}
-          placeholder="https://www.youtube.com/watch?v=..."
-          autoFocus
-          disabled={submitting || settings?.enabled === false}
-        />
-
-        <button
-          type="submit"
-          className="opus-cta"
-          disabled={!sourceUrl.trim() || submitting || settings?.enabled === false}
-        >
-          {submitting ? "Queuing…" : "Run autopilot on this video"}
-        </button>
+        <div className="opus-input-row">
+          <input
+            id="source-url"
+            className="opus-input opus-input-lg"
+            value={sourceUrl}
+            onChange={(event) => setSourceUrl(event.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            autoFocus
+            disabled={submitting || settings?.enabled === false}
+          />
+          <button
+            type="submit"
+            className="opus-cta"
+            disabled={!sourceUrl.trim() || submitting || settings?.enabled === false}
+          >
+            {submitting ? "Queuing…" : "Queue"}
+          </button>
+        </div>
       </form>
 
       <div className="opus-panel opus-resume">
@@ -299,9 +297,7 @@ export default function AutopilotDashboard() {
           <div>
             <h3>Autopilot {settings?.enabled ? "ON" : "PAUSED"}</h3>
             <p className="opus-hint">
-              Up to {settings?.max_clips_per_source ?? 4} clips per video ·{" "}
-              {settings?.posts_per_day ?? 4} posts/day max ·{" "}
-              {settings?.min_hours_between_posts ?? 3}h minimum gap
+              Up to {settings?.max_clips_per_source ?? 4} clips per video
             </p>
           </div>
           <button type="button" className="opus-secondary" onClick={toggleAutopilot}>
@@ -310,27 +306,31 @@ export default function AutopilotDashboard() {
         </div>
       </div>
 
-      <section className="opus-panel">
-        <h3>Recent campaigns</h3>
-        {loading ? <p className="opus-hint">Loading…</p> : null}
-        {!loading && campaigns.length === 0 ? (
-          <p className="opus-hint">No campaigns yet. Paste a YouTube URL above.</p>
-        ) : null}
-        <ul className="opus-campaign-list">
-          {campaigns.map((campaign) => (
-            <li key={campaign.id} className="opus-campaign-item">
-              <div>
-                <strong>{statusLabel(campaign.status)}</strong>
-                <p className="opus-hint opus-campaign-url">{campaign.source_url}</p>
-                {campaign.error_message ? (
-                  <p className="opus-error">{campaign.error_message}</p>
-                ) : null}
-              </div>
-              <span className="opus-hint">{formatWhen(campaign.created_at)}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
+      <MonitorSection
+        posts={monitorPosts}
+        summary={monitorSummary}
+        loading={loading}
+      />
+
+      {campaigns.length > 0 ? (
+        <section className="opus-panel">
+          <h3>Recent sources</h3>
+          <ul className="opus-campaign-list">
+            {campaigns.slice(0, 5).map((campaign) => (
+              <li key={campaign.id} className="opus-campaign-item">
+                <div>
+                  <strong>{statusLabel(campaign.status)}</strong>
+                  <p className="opus-hint opus-campaign-url">{campaign.source_url}</p>
+                  {campaign.error_message ? (
+                    <p className="opus-error">{campaign.error_message}</p>
+                  ) : null}
+                </div>
+                <span className="opus-hint">{formatWhen(campaign.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </SiteShell>
   );
 }
