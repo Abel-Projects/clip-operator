@@ -10,7 +10,6 @@ export type PostStatus = "queued" | "posting" | "posted" | "failed";
 
 export type AutopilotSettingsRow = {
   id: number;
-  niche: string;
   max_clips_per_source: number;
   posts_per_day: number;
   min_hours_between_posts: number;
@@ -18,6 +17,7 @@ export type AutopilotSettingsRow = {
   timezone: string;
   enabled: boolean;
   updated_at: string;
+  niche?: string;
 };
 
 export type CampaignRow = {
@@ -56,6 +56,11 @@ export type ScheduledPostRow = {
   caption_title: string | null;
   caption_description: string | null;
   error_message: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  metrics_synced_at: string | null;
   created_at: string;
 };
 

@@ -1,4 +1,4 @@
-import { buildAutopilotCaption, resolveNiche } from "@/lib/autopilot/presets";
+import { buildAutopilotCaption } from "@/lib/autopilot/captions";
 import { getAutopilotSettings } from "@/lib/autopilot/settings";
 import {
   canPostNow,
@@ -46,12 +46,8 @@ async function processPendingCampaign(
   campaign: CampaignRow,
   actions: string[]
 ): Promise<void> {
-  const settings = await getAutopilotSettings();
-  const preset = resolveNiche(campaign.niche);
-
   const project = await createOpusClipProject({
     videoUrl: campaign.source_url,
-    topicKeywords: preset.topicKeywords,
     sourceLang: "auto",
     clipDurationSec: 90
   });
@@ -192,8 +188,7 @@ async function processSchedulingCampaign(
   const posts = clips.map((clip, index) => {
     const caption = buildAutopilotCaption({
       title: clip.title,
-      description: clip.title,
-      niche: campaign.niche
+      description: clip.title
     });
 
     return {
@@ -254,16 +249,9 @@ async function processDuePosts(actions: string[]): Promise<void> {
     .eq("id", post.campaign_clip_id)
     .maybeSingle();
 
-  const { data: campaign } = await supabase
-    .from("campaigns")
-    .select("niche")
-    .eq("id", post.campaign_id)
-    .maybeSingle();
-
   const caption = buildAutopilotCaption({
     title: post.caption_title ?? clipRow?.title,
-    description: post.caption_description ?? clipRow?.title,
-    niche: campaign?.niche ?? settings.niche
+    description: post.caption_description ?? clipRow?.title
   });
 
   const result = await publishOpusClipToTikTok({
@@ -393,16 +381,13 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
 
 export async function createCampaign(input: {
   sourceUrl: string;
-  niche?: string;
 }): Promise<CampaignRow> {
-  const settings = await getAutopilotSettings();
   const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
       source_url: input.sourceUrl.trim(),
-      niche: input.niche?.trim() || settings.niche,
       status: "pending"
     })
     .select("*")

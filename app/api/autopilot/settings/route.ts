@@ -49,7 +49,6 @@ export async function PATCH(req: Request) {
 
   const patch: Record<string, unknown> = {};
 
-  if (typeof body.niche === "string") patch.niche = body.niche;
   if (typeof body.max_clips_per_source === "number") {
     patch.max_clips_per_source = Math.min(8, Math.max(1, body.max_clips_per_source));
   }

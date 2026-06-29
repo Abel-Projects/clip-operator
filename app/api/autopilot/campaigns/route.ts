@@ -70,9 +70,9 @@ export async function POST(req: Request) {
     return blocked;
   }
 
-  let body: { sourceUrl?: string; niche?: string };
+  let body: { sourceUrl?: string };
   try {
-    body = (await req.json()) as { sourceUrl?: string; niche?: string };
+    body = (await req.json()) as { sourceUrl?: string };
   } catch {
     return NextResponse.json(
       { ok: false, message: "Invalid JSON body." },
@@ -90,8 +90,7 @@ export async function POST(req: Request) {
 
   try {
     const campaign = await createCampaign({
-      sourceUrl,
-      niche: body.niche
+      sourceUrl
     });
 
     const origin = new URL(req.url).origin;

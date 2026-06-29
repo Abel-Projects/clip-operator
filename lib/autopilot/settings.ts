@@ -3,7 +3,6 @@ import type { AutopilotSettingsRow } from "@/lib/supabase/types";
 
 export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   id: 1,
-  niche: "sharks",
   max_clips_per_source: 4,
   posts_per_day: 4,
   min_hours_between_posts: 3,

@@ -19,7 +19,6 @@ type CampaignStatus =
 type Campaign = {
   id: string;
   source_url: string;
-  niche: string;
   opus_project_id: string | null;
   status: CampaignStatus;
   error_message: string | null;
@@ -34,18 +33,11 @@ type Summary = {
 };
 
 type Settings = {
-  niche: string;
   max_clips_per_source: number;
   posts_per_day: number;
   min_hours_between_posts: number;
   enabled: boolean;
 };
-
-const NICHES = [
-  { id: "sharks", label: "Sharks / deals" },
-  { id: "founders", label: "Founders" },
-  { id: "general", label: "General biz" }
-];
 
 function formatWhen(iso: string | null) {
   if (!iso) return "—";
@@ -75,7 +67,6 @@ export default function AutopilotDashboard() {
   const [passwordError, setPasswordError] = useState("");
 
   const [sourceUrl, setSourceUrl] = useState("");
-  const [niche, setNiche] = useState("sharks");
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -118,7 +109,6 @@ export default function AutopilotDashboard() {
 
     if (settingsData.settings) {
       setSettings(settingsData.settings);
-      setNiche(settingsData.settings.niche);
     }
   }, []);
 
@@ -177,7 +167,7 @@ export default function AutopilotDashboard() {
       const response = await authFetch("/api/autopilot/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceUrl: sourceUrl.trim(), niche })
+        body: JSON.stringify({ sourceUrl: sourceUrl.trim() })
       });
 
       const data = (await response.json()) as { ok?: boolean; message?: string };
@@ -241,6 +231,7 @@ export default function AutopilotDashboard() {
           <span className="opus-tag">Autopilot</span>
         </div>
         <nav className="opus-nav">
+          <a href="/monitor">Monitor</a>
           <a href="/workbench">Manual mode</a>
         </nav>
       </header>
@@ -293,23 +284,6 @@ export default function AutopilotDashboard() {
           autoFocus
           disabled={submitting || settings?.enabled === false}
         />
-
-        <label className="opus-label" htmlFor="niche">
-          Niche preset
-        </label>
-        <select
-          id="niche"
-          className="opus-input"
-          value={niche}
-          onChange={(event) => setNiche(event.target.value)}
-          disabled={submitting}
-        >
-          {NICHES.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
 
         <button
           type="submit"

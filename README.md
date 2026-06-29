@@ -8,8 +8,8 @@ Hosted on **Vercel**: `https://clip-operator.vercel.app` (password-protected via
 
 ## Autopilot flow
 
-1. You paste a YouTube URL (+ niche preset: Sharks, Founders, etc.)
-2. Background worker starts an **OpusClip** project with niche keywords
+1. You paste a YouTube URL
+2. Background worker starts an **OpusClip** project
 3. When clips are ready, autopilot keeps the **top 4** (configurable) by score
 4. Posts are **queued to TikTok** with spacing (default **4/day max**, **3 hours** between posts)
 5. Vercel cron runs every **5 minutes** to advance clipping and publish due posts
@@ -48,7 +48,7 @@ TikTok must be connected in **OpusClip** (or set `OPUSCLIP_POST_ACCOUNT_ID` / `O
 pnpm dev
 ```
 
-Open **http://localhost:3000** (autopilot). Manual compare UI: **http://localhost:3000/workbench**
+Open **http://localhost:3000** (autopilot). **Monitor:** `/monitor`. Manual compare UI: `/workbench`
 
 Trigger the background worker locally:
 
@@ -88,4 +88,4 @@ See previous README section for SupoClip Docker setup. SupoClip has no TikTok au
 
 - Autopilot uses **OpusClip only** (WayinVideo remains in manual workbench).
 - File upload is disabled on Vercel; autopilot expects **YouTube URLs**.
-- Phase 2 (metrics sync, auto-delete losers) is not implemented yet — campaigns and scheduled posts are tracked in Supabase for when we add it.
+- Phase 2 (TikTok metrics sync, auto-delete losers) — `/monitor` shows clip/post data now; view counts fill in once TikTok sync is added.

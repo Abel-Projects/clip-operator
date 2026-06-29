@@ -271,6 +271,10 @@ button {
   gap: 24px;
 }
 
+.opus-page-wide {
+  max-width: 1100px;
+}
+
 .opus-page-auth {
   justify-content: center;
 }
@@ -371,6 +375,104 @@ button {
 
 select.opus-input {
   appearance: none;
+}
+
+.opus-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.opus-filter-tab {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.opus-filter-tab.active {
+  border-color: rgba(255, 158, 199, 0.45);
+  color: var(--text);
+  background: rgba(255, 158, 199, 0.08);
+}
+
+.opus-table-wrap {
+  overflow-x: auto;
+}
+
+.opus-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.opus-table th,
+.opus-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.opus-table th {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.opus-table-source {
+  max-width: 180px;
+  word-break: break-all;
+  color: var(--muted);
+}
+
+.opus-table-clip {
+  display: grid;
+  gap: 6px;
+}
+
+.opus-table-preview {
+  color: #ffbdd8;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.opus-table-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.opus-pill {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.opus-pill.ok {
+  background: rgba(124, 247, 212, 0.12);
+  color: var(--accent);
+}
+
+.opus-pill.bad {
+  background: rgba(255, 123, 139, 0.12);
+  color: #ffc2cb;
+}
+
+.opus-pill.active {
+  background: rgba(122, 167, 255, 0.12);
+  color: #b8ccff;
 }
 
 .opus-topbar {
