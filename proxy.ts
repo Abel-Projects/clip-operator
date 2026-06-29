@@ -17,6 +17,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Basic ")) {
     return unauthorizedApi();
