@@ -15,7 +15,7 @@ if (-not (Test-Path ".venv")) {
 
 if (-not (Test-Path ".env")) {
     Copy-Item .env.example .env
-    Write-Host "Created .env — fill in secrets before running agent.py"
+    Write-Host "Created .env - fill in secrets before running agent.py"
 }
 
 Write-Host "Setup complete. Edit .env, add cookies.txt, then: python agent.py"
