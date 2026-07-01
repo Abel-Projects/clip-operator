@@ -142,21 +142,11 @@ def truncate_caption(text: str, max_len: int = 150) -> str:
 
 def upload_to_tiktok(video_path: Path, description: str) -> None:
     cookies = require_env("TIKTOK_COOKIES_PATH")
-    if not Path(cookies).is_file():
-        raise RuntimeError(f"TikTok cookies file not found: {cookies}")
-
-    from tiktok_uploader.upload import TikTokUploader
-
     caption = truncate_caption(description, 150)
-    uploader = TikTokUploader(cookies=cookies, headless=False)
-    ok = uploader.upload_video(
-        str(video_path),
-        description=caption,
-        num_retries=3,
-        skip_split_window=True,
-    )
-    if not ok:
-        raise RuntimeError("TikTok uploader reported failure (modal/UI or post button).")
+
+    from tiktok_upload import upload_from_env
+
+    upload_from_env(video_path, caption, cookies)
 
 
 def run_once() -> bool:
