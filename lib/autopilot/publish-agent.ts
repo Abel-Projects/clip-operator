@@ -31,13 +31,21 @@ export function isPublishAgentAuthorized(req: Request): boolean {
   return req.headers.get("x-publish-agent-secret") === secret;
 }
 
-function formatTikTokCaption(caption: { title: string; description: string }): string {
-  const body =
-    caption.title === caption.description
-      ? caption.title
-      : `${caption.title}\n\n${caption.description}`;
+function truncateForTikTok(text: string, max = 150): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= max) {
+    return cleaned;
+  }
 
-  return `${body}\n\n#sharktank #entrepreneur #business #startup`;
+  const cut = cleaned.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  const hook = (lastSpace > 50 ? cut.slice(0, lastSpace) : cut).trim();
+  return `${hook}...`;
+}
+
+function formatTikTokCaption(caption: { title: string; description: string }): string {
+  const hook = truncateForTikTok(caption.title || caption.description);
+  return `${hook}\n\n#sharktank #entrepreneur #business #startup`;
 }
 
 export async function recoverStalePostingJobs(): Promise<number> {

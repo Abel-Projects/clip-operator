@@ -130,6 +130,16 @@ def download_clip(project_id: str, clip_id: str, dest: Path) -> None:
         raise RuntimeError("Downloaded clip is too small; check SupoClip task status.")
 
 
+def truncate_caption(text: str, max_len: int = 150) -> str:
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= max_len:
+        return cleaned
+    cut = cleaned[:max_len]
+    last_space = cut.rfind(" ")
+    hook = cut[:last_space].strip() if last_space > 50 else cut.strip()
+    return f"{hook}..."
+
+
 def upload_to_tiktok(video_path: Path, description: str) -> None:
     cookies = require_env("TIKTOK_COOKIES_PATH")
     if not Path(cookies).is_file():
@@ -137,8 +147,16 @@ def upload_to_tiktok(video_path: Path, description: str) -> None:
 
     from tiktok_uploader.upload import TikTokUploader
 
-    uploader = TikTokUploader(cookies=cookies)
-    uploader.upload_video(str(video_path), description=description)
+    caption = truncate_caption(description, 150)
+    uploader = TikTokUploader(cookies=cookies, headless=False)
+    ok = uploader.upload_video(
+        str(video_path),
+        description=caption,
+        num_retries=3,
+        skip_split_window=True,
+    )
+    if not ok:
+        raise RuntimeError("TikTok uploader reported failure (modal/UI or post button).")
 
 
 def run_once() -> bool:
