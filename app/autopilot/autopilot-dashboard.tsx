@@ -39,6 +39,17 @@ type Summary = {
   nextPostAt: string | null;
 };
 
+function formatPostInterval(hours: number): string {
+  if (hours < 1) {
+    const minutes = Math.round(hours * 60);
+    return `${minutes}m`;
+  }
+  if (Number.isInteger(hours)) {
+    return `${hours}h`;
+  }
+  return `${Math.round(hours * 60)}m`;
+}
+
 type Settings = {
   niche: string;
   clip_provider: string;
@@ -287,7 +298,8 @@ export default function AutopilotDashboard() {
         <p>
           Discovers interview-style business videos (≤{settings?.max_source_duration_min ?? 20}{" "}
           min), clips with {providerLabel(settings?.clip_provider ?? "wayinvideo")}, and posts
-          to TikTok about every {settings?.min_hours_between_posts ?? 1}h — up to{" "}
+          to TikTok about every{" "}
+          {formatPostInterval(settings?.min_hours_between_posts ?? 1 / 3)} (up to 3/hour) — up to{" "}
           {settings?.sources_per_day ?? 4} new sources per day.
         </p>
       </section>

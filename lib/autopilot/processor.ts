@@ -227,7 +227,7 @@ async function processSchedulingCampaign(
     .eq("id", campaign.id);
 
   actions.push(
-    `Campaign ${campaign.id}: queued ${posts.length} TikTok post(s), ${settings.min_hours_between_posts}h apart`
+    `Campaign ${campaign.id}: queued ${posts.length} TikTok post(s), ${Math.round(settings.min_hours_between_posts * 60)}m apart`
   );
 }
 
