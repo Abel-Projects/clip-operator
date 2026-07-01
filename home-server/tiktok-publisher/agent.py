@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -143,10 +144,18 @@ def truncate_caption(text: str, max_len: int = 150) -> str:
 def upload_to_tiktok(video_path: Path, description: str) -> None:
     cookies = require_env("TIKTOK_COOKIES_PATH")
     caption = truncate_caption(description, 150)
+    timeout_sec = int(env("UPLOAD_TIMEOUT_SEC", "480"))
 
     from tiktok_upload import upload_from_env
 
-    upload_from_env(video_path, caption, cookies)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(upload_from_env, video_path, caption, cookies)
+        try:
+            future.result(timeout=timeout_sec)
+        except FuturesTimeoutError as exc:
+            raise RuntimeError(
+                f"TikTok upload timed out after {timeout_sec}s"
+            ) from exc
 
 
 def run_once() -> bool:
@@ -175,7 +184,7 @@ def run_once() -> bool:
             complete_job(post_id, False, message)
         except Exception as report_exc:  # noqa: BLE001
             print(f"Could not report failure: {report_exc}", file=sys.stderr)
-        raise
+        return False
     finally:
         if tmp.exists():
             tmp.unlink(missing_ok=True)
@@ -185,7 +194,8 @@ def run_once() -> bool:
 
 def main() -> int:
     try:
-        run_once()
+        if not run_once():
+            return 0
     except Exception as exc:  # noqa: BLE001
         print(exc, file=sys.stderr)
         return 1

@@ -4,6 +4,7 @@ import {
   countCampaignsCreatedToday,
   discoverSourceVideo
 } from "@/lib/autopilot/discovery";
+import { recoverStalePostingJobs } from "@/lib/autopilot/publish-agent";
 import { getClipProvider, type ProviderClip } from "@/lib/autopilot/providers";
 import { getAutopilotSettings } from "@/lib/autopilot/settings";
 import {
@@ -393,6 +394,11 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
     const settings = await getAutopilotSettings();
     if (!settings.enabled) {
       return { ok: true, actions: ["Autopilot is paused"] };
+    }
+
+    const recovered = await recoverStalePostingJobs();
+    if (recovered > 0) {
+      actions.push(`Re-queued ${recovered} stuck TikTok publish job(s)`);
     }
 
     const supabase = getSupabaseAdmin();

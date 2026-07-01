@@ -4,7 +4,34 @@ import { getAutopilotSettings } from "@/lib/autopilot/settings";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { ScheduledPostRow } from "@/lib/supabase/types";
 
-const STALE_POSTING_MS = 30 * 60 * 1000;
+const STALE_POSTING_MS = 12 * 60 * 1000;
+
+function parseClaimedAt(errorMessage: string | null): number | null {
+  const marker = errorMessage ?? "";
+  if (!marker.startsWith("claim:")) {
+    return null;
+  }
+  const claimedAt = Date.parse(marker.slice(6));
+  return Number.isFinite(claimedAt) ? claimedAt : null;
+}
+
+async function hasFreshPostingJob(): Promise<boolean> {
+  const supabase = getSupabaseAdmin();
+  const { data: posting, error } = await supabase
+    .from("scheduled_posts")
+    .select("id, error_message")
+    .eq("status", "posting");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const now = Date.now();
+  return (posting ?? []).some((row) => {
+    const claimedAt = parseClaimedAt(row.error_message);
+    return claimedAt !== null && now - claimedAt < STALE_POSTING_MS;
+  });
+}
 
 export type PublishJob = {
   id: string;
@@ -64,11 +91,9 @@ export async function recoverStalePostingJobs(): Promise<number> {
   const now = Date.now();
 
   for (const row of posting ?? []) {
-    const marker = row.error_message ?? "";
-    const claimedAt =
-      marker.startsWith("claim:") ? Date.parse(marker.slice(6)) : Number.NaN;
+    const claimedAt = parseClaimedAt(row.error_message);
 
-    if (!Number.isFinite(claimedAt) || now - claimedAt < STALE_POSTING_MS) {
+    if (claimedAt === null || now - claimedAt < STALE_POSTING_MS) {
       continue;
     }
 
@@ -122,14 +147,7 @@ export async function claimNextSupoclipPublishJob(): Promise<PublishJob | null> 
       campaigns?: { clip_provider?: string };
     };
 
-    const { data: inFlight } = await supabase
-      .from("scheduled_posts")
-      .select("id")
-      .eq("status", "posting")
-      .limit(1)
-      .maybeSingle();
-
-    if (inFlight) {
+    if (await hasFreshPostingJob()) {
       return null;
     }
 
@@ -211,10 +229,15 @@ export async function completePublishJob(
     return { ok: true, message: result.message ?? "Posted to TikTok." };
   }
 
+  const transient =
+    /timeout|timed out|modal|post button|upload failed|hung/i.test(
+      result.message ?? ""
+    );
+
   const { error } = await supabase
     .from("scheduled_posts")
     .update({
-      status: "failed",
+      status: transient ? "queued" : "failed",
       error_message: result.message ?? "TikTok upload failed."
     })
     .eq("id", postId);
