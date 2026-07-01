@@ -11,7 +11,7 @@ export type MonitorPost = {
   postedAt: string | null;
   captionTitle: string | null;
   errorMessage: string | null;
-  opusClipId: string;
+  providerClipId: string;
   views: number | null;
   likes: number | null;
   clip: {
@@ -37,6 +37,8 @@ type MonitorSectionProps = {
   posts: MonitorPost[];
   summary: MonitorSummary | null;
   loading: boolean;
+  onClearFailed?: () => void;
+  clearingFailed?: boolean;
 };
 
 function formatWhen(iso: string | null) {
@@ -68,7 +70,13 @@ function statusClass(status: PostStatus) {
   }
 }
 
-export default function MonitorSection({ posts, summary, loading }: MonitorSectionProps) {
+export default function MonitorSection({
+  posts,
+  summary,
+  loading,
+  onClearFailed,
+  clearingFailed
+}: MonitorSectionProps) {
   const [filter, setFilter] = useState<"all" | PostStatus>("all");
   const visiblePosts =
     filter === "all" ? posts : posts.filter((post) => post.status === filter);
@@ -89,6 +97,16 @@ export default function MonitorSection({ posts, summary, loading }: MonitorSecti
             <span>{summary.queued} queued</span>
             {summary.failed > 0 ? <span className="bad">{summary.failed} failed</span> : null}
           </div>
+        ) : null}
+        {summary && summary.failed > 0 && onClearFailed ? (
+          <button
+            type="button"
+            className="opus-secondary opus-secondary-sm"
+            onClick={onClearFailed}
+            disabled={clearingFailed}
+          >
+            {clearingFailed ? "Clearing…" : "Clear failed"}
+          </button>
         ) : null}
       </div>
 
@@ -113,7 +131,7 @@ export default function MonitorSection({ posts, summary, loading }: MonitorSecti
 
       {loading ? <p className="opus-hint">Loading clips…</p> : null}
       {!loading && visiblePosts.length === 0 ? (
-        <p className="opus-hint">No clips yet. Queue a YouTube URL above.</p>
+        <p className="opus-hint">No clips yet. Autopilot will discover sources when enabled.</p>
       ) : null}
 
       {!loading && visiblePosts.length > 0 ? (
@@ -151,7 +169,7 @@ export default function MonitorSection({ posts, summary, loading }: MonitorSecti
                           Preview
                         </a>
                       ) : null}
-                      <span>{post.captionTitle ?? post.clip?.title ?? post.opusClipId}</span>
+                      <span>{post.captionTitle ?? post.clip?.title ?? post.providerClipId}</span>
                     </div>
                     {post.campaign?.sourceUrl ? (
                       <p className="opus-hint opus-table-source">{post.campaign.sourceUrl}</p>

@@ -8,23 +8,31 @@ export type CampaignStatus =
 
 export type PostStatus = "queued" | "posting" | "posted" | "failed";
 
+export type ClipProviderName = "wayinvideo" | "supoclip";
+
 export type AutopilotSettingsRow = {
   id: number;
+  niche: string;
+  clip_provider: ClipProviderName;
   max_clips_per_source: number;
   posts_per_day: number;
   min_hours_between_posts: number;
   min_clip_score: number;
   timezone: string;
   enabled: boolean;
+  sources_per_day: number;
+  max_source_duration_min: number;
+  discovery_keywords: string[] | unknown;
+  discovery_channels: string[] | unknown;
   updated_at: string;
-  niche?: string;
 };
 
 export type CampaignRow = {
   id: string;
   source_url: string;
   niche: string;
-  opus_project_id: string | null;
+  clip_provider: ClipProviderName;
+  provider_project_id: string | null;
   status: CampaignStatus;
   error_message: string | null;
   poll_count: number;
@@ -35,7 +43,7 @@ export type CampaignRow = {
 export type CampaignClipRow = {
   id: string;
   campaign_id: string;
-  opus_clip_id: string;
+  provider_clip_id: string;
   title: string | null;
   score: number | null;
   duration_sec: number | null;
@@ -48,8 +56,8 @@ export type ScheduledPostRow = {
   id: string;
   campaign_id: string;
   campaign_clip_id: string;
-  opus_project_id: string;
-  opus_clip_id: string;
+  provider_project_id: string;
+  provider_clip_id: string;
   scheduled_at: string;
   posted_at: string | null;
   status: PostStatus;
@@ -77,7 +85,8 @@ export type Database = {
         Insert: {
           source_url: string;
           niche?: string;
-          opus_project_id?: string | null;
+          clip_provider?: ClipProviderName;
+          provider_project_id?: string | null;
           status?: CampaignStatus;
           error_message?: string | null;
           poll_count?: number;
@@ -88,7 +97,7 @@ export type Database = {
         Row: CampaignClipRow;
         Insert: {
           campaign_id: string;
-          opus_clip_id: string;
+          provider_clip_id: string;
           title?: string | null;
           score?: number | null;
           duration_sec?: number | null;
@@ -103,8 +112,8 @@ export type Database = {
         Insert: {
           campaign_id: string;
           campaign_clip_id: string;
-          opus_project_id: string;
-          opus_clip_id: string;
+          provider_project_id: string;
+          provider_clip_id: string;
           scheduled_at: string;
           posted_at?: string | null;
           status?: PostStatus;

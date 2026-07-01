@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function OpusClipLegacyPage() {
-  redirect("/?provider=opusclip");
+  redirect("/workbench?provider=wayinvideo");
 }

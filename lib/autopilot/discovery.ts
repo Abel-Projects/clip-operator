@@ -1,0 +1,239 @@
+import { getSupabaseAdmin } from "@/lib/supabase/server";
+import type { AutopilotSettingsRow } from "@/lib/supabase/types";
+
+export type DiscoveredVideo = {
+  videoId: string;
+  url: string;
+  title: string;
+  channelTitle: string;
+  durationSec: number;
+};
+
+const YOUTUBE_API = "https://www.googleapis.com/youtube/v3";
+
+function parseIso8601Duration(value: string): number {
+  const match = value.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) {
+    return 0;
+  }
+
+  const hours = Number(match[1] ?? 0);
+  const minutes = Number(match[2] ?? 0);
+  const seconds = Number(match[3] ?? 0);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+function toVideoUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+function parseKeywordList(settings: AutopilotSettingsRow): string[] {
+  const raw = settings.discovery_keywords;
+  if (Array.isArray(raw)) {
+    return raw.filter((entry): entry is string => typeof entry === "string");
+  }
+  return [];
+}
+
+function parseChannelList(settings: AutopilotSettingsRow): string[] {
+  const raw = settings.discovery_channels;
+  if (Array.isArray(raw)) {
+    return raw.filter((entry): entry is string => typeof entry === "string");
+  }
+  return [];
+}
+
+async function youtubeGet<T>(
+  apiKey: string,
+  path: string,
+  params: Record<string, string>
+): Promise<T | null> {
+  const url = new URL(`${YOUTUBE_API}${path}`);
+  url.searchParams.set("key", apiKey);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as T;
+}
+
+async function fetchVideoDetails(
+  apiKey: string,
+  videoIds: string[]
+): Promise<Map<string, { durationSec: number; title: string; channelTitle: string }>> {
+  if (videoIds.length === 0) {
+    return new Map();
+  }
+
+  const payload = await youtubeGet<{
+    items?: Array<{
+      id?: string;
+      snippet?: { title?: string; channelTitle?: string };
+      contentDetails?: { duration?: string };
+    }>;
+  }>(apiKey, "/videos", {
+    part: "snippet,contentDetails",
+    id: videoIds.join(",")
+  });
+
+  const map = new Map<string, { durationSec: number; title: string; channelTitle: string }>();
+  for (const item of payload?.items ?? []) {
+    if (!item.id) continue;
+    map.set(item.id, {
+      durationSec: parseIso8601Duration(item.contentDetails?.duration ?? ""),
+      title: item.snippet?.title ?? item.id,
+      channelTitle: item.snippet?.channelTitle ?? ""
+    });
+  }
+
+  return map;
+}
+
+function isUsableTitle(title: string): boolean {
+  const lower = title.toLowerCase();
+  const blocked = [
+    "shark tank best moments",
+    "shark tank compilation",
+    "shark tank full episode",
+    "shark tank season",
+    "#shorts"
+  ];
+  return !blocked.some((phrase) => lower.includes(phrase));
+}
+
+async function searchByKeyword(
+  apiKey: string,
+  query: string,
+  maxResults: number
+): Promise<string[]> {
+  const payload = await youtubeGet<{
+    items?: Array<{ id?: { videoId?: string } }>;
+  }>(apiKey, "/search", {
+    part: "snippet",
+    type: "video",
+    q: query,
+    maxResults: String(maxResults),
+    order: "date",
+    relevanceLanguage: "en",
+    safeSearch: "moderate"
+  });
+
+  return (payload?.items ?? [])
+    .map((item) => item.id?.videoId)
+    .filter((id): id is string => Boolean(id));
+}
+
+async function latestFromChannel(
+  apiKey: string,
+  channelId: string,
+  maxResults: number
+): Promise<string[]> {
+  const channelPayload = await youtubeGet<{
+    items?: Array<{ contentDetails?: { relatedPlaylists?: { uploads?: string } } }>;
+  }>(apiKey, "/channels", {
+    part: "contentDetails",
+    id: channelId
+  });
+
+  const uploadsPlaylist =
+    channelPayload?.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsPlaylist) {
+    return [];
+  }
+
+  const playlistPayload = await youtubeGet<{
+    items?: Array<{ snippet?: { resourceId?: { videoId?: string } } }>;
+  }>(apiKey, "/playlistItems", {
+    part: "snippet",
+    playlistId: uploadsPlaylist,
+    maxResults: String(maxResults)
+  });
+
+  return (playlistPayload?.items ?? [])
+    .map((item) => item.snippet?.resourceId?.videoId)
+    .filter((id): id is string => Boolean(id));
+}
+
+async function getKnownSourceUrls(): Promise<Set<string>> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase.from("campaigns").select("source_url");
+  return new Set((data ?? []).map((row) => row.source_url));
+}
+
+export async function countCampaignsCreatedToday(): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+
+  const { count } = await supabase
+    .from("campaigns")
+    .select("*", { count: "exact", head: true })
+    .gte("created_at", start.toISOString());
+
+  return count ?? 0;
+}
+
+export async function discoverSourceVideo(
+  settings: AutopilotSettingsRow
+): Promise<DiscoveredVideo | null> {
+  const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+  if (!apiKey) {
+    return null;
+  }
+
+  const maxDurationSec = Math.max(60, settings.max_source_duration_min * 60);
+  const known = await getKnownSourceUrls();
+  const candidateIds: string[] = [];
+
+  for (const channelId of parseChannelList(settings)) {
+    const ids = await latestFromChannel(apiKey, channelId, 5);
+    candidateIds.push(...ids);
+  }
+
+  for (const keyword of parseKeywordList(settings)) {
+    const ids = await searchByKeyword(apiKey, keyword, 5);
+    candidateIds.push(...ids);
+  }
+
+  const uniqueIds = [...new Set(candidateIds)];
+  if (uniqueIds.length === 0) {
+    return null;
+  }
+
+  const details = await fetchVideoDetails(apiKey, uniqueIds);
+
+  for (const videoId of uniqueIds) {
+    const url = toVideoUrl(videoId);
+    if (known.has(url)) {
+      continue;
+    }
+
+    const meta = details.get(videoId);
+    if (!meta) {
+      continue;
+    }
+
+    if (meta.durationSec <= 0 || meta.durationSec > maxDurationSec) {
+      continue;
+    }
+
+    if (!isUsableTitle(meta.title)) {
+      continue;
+    }
+
+    return {
+      videoId,
+      url,
+      title: meta.title,
+      channelTitle: meta.channelTitle,
+      durationSec: meta.durationSec
+    };
+  }
+
+  return null;
+}

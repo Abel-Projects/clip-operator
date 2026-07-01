@@ -3,12 +3,30 @@ import type { AutopilotSettingsRow } from "@/lib/supabase/types";
 
 export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   id: 1,
+  niche: "shark_tank_entrepreneurs",
+  clip_provider: "wayinvideo",
   max_clips_per_source: 4,
-  posts_per_day: 4,
-  min_hours_between_posts: 3,
+  posts_per_day: 24,
+  min_hours_between_posts: 1,
   min_clip_score: 0,
   timezone: "America/New_York",
-  enabled: true
+  enabled: true,
+  sources_per_day: 4,
+  max_source_duration_min: 20,
+  discovery_keywords: [
+    "mark cuban interview entrepreneur",
+    "barbara corcoran interview advice",
+    "kevin o'leary interview business",
+    "daymond john entrepreneur interview",
+    "lori greiner interview startup",
+    "shark tank investor interview podcast",
+    "entrepreneur advice startup interview"
+  ],
+  discovery_channels: [
+    "UCnnQ2f4XSGDzLkgBGbecBaA",
+    "UCnYMOamNKLGVlJgLtbb2JLA",
+    "UC6sS9qHuFKBRKW-bpdgLl_w"
+  ]
 };
 
 export async function getAutopilotSettings(): Promise<AutopilotSettingsRow> {
@@ -37,7 +55,10 @@ export async function getAutopilotSettings(): Promise<AutopilotSettingsRow> {
     return inserted;
   }
 
-  return data;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...data
+  };
 }
 
 export async function updateAutopilotSettings(

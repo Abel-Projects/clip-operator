@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Clip Operator",
-  description: "Turn long videos into short clips with OpusClip."
+  description: "Autopilot clipping for entrepreneur interview content."
 };
 
 export default function RootLayout({

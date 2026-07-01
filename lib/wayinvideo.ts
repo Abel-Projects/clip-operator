@@ -696,6 +696,83 @@ function buildPublishDescription(clip: WayinVideoClip): string {
   return parts.join("\n\n").trim() || clip.title || "Clip";
 }
 
+export async function publishWayinVideoClipToTikTok(input: {
+  projectId: string;
+  clip: WayinVideoClip;
+}): Promise<ClipPostResult> {
+  const config = getConfig();
+  if (!config) {
+    return {
+      clipId: input.clip.clipId,
+      ok: false,
+      message: "WAYINVIDEO_API_KEY is not set."
+    };
+  }
+
+  const account = await resolveTikTokAccount();
+  if (!account) {
+    return {
+      clipId: input.clip.clipId,
+      ok: false,
+      message:
+        "No TikTok account found. Connect TikTok in WayinVideo or set WAYINVIDEO_TIKTOK_ACCOUNT_ID."
+    };
+  }
+
+  try {
+    const response = await fetch(`${config.baseUrl}/social-media/publish`, {
+      method: "POST",
+      headers: authHeaders(config),
+      body: JSON.stringify({
+        project_id: input.projectId,
+        idx: input.clip.idx,
+        resolution: "720p",
+        publish_configs: {
+          [account.id]: {
+            title: input.clip.title ?? "Clip",
+            description: buildPublishDescription(input.clip),
+            visibility: "public"
+          }
+        },
+        scheduled_at: null
+      })
+    });
+
+    const text = await response.text();
+    let payload: unknown = text;
+
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      // Keep raw text when WayinVideo returns non-JSON errors.
+    }
+
+    if (!response.ok) {
+      return {
+        clipId: input.clip.clipId,
+        ok: false,
+        message:
+          typeof payload === "string"
+            ? payload
+            : JSON.stringify(payload, null, 2)
+      };
+    }
+
+    return {
+      clipId: input.clip.clipId,
+      ok: true,
+      message: `Queued TikTok post for ${input.clip.title ?? `clip ${input.clip.idx}`}`
+    };
+  } catch (error) {
+    return {
+      clipId: input.clip.clipId,
+      ok: false,
+      message:
+        error instanceof Error ? error.message : "Unexpected publish error."
+    };
+  }
+}
+
 export async function autoPostAllClipsToTikTok(input: {
   projectId: string;
   clips: WayinVideoClip[];
@@ -730,58 +807,11 @@ export async function autoPostAllClipsToTikTok(input: {
   const results: ClipPostResult[] = [];
 
   for (const clip of input.clips) {
-    try {
-      const response = await fetch(`${config.baseUrl}/social-media/publish`, {
-        method: "POST",
-        headers: authHeaders(config),
-        body: JSON.stringify({
-          project_id: input.projectId,
-          idx: clip.idx,
-          resolution: "720p",
-          publish_configs: {
-            [account.id]: {
-              title: clip.title ?? "Clip",
-              description: buildPublishDescription(clip),
-              visibility: "public"
-            }
-          },
-          scheduled_at: null
-        })
-      });
-
-      const text = await response.text();
-      let payload: unknown = text;
-
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        // Keep raw text when WayinVideo returns non-JSON errors.
-      }
-
-      if (!response.ok) {
-        results.push({
-          clipId: clip.clipId,
-          ok: false,
-          message:
-            typeof payload === "string"
-              ? payload
-              : JSON.stringify(payload, null, 2)
-        });
-      } else {
-        results.push({
-          clipId: clip.clipId,
-          ok: true,
-          message: `Queued TikTok post for ${clip.title ?? `clip ${clip.idx}`}`
-        });
-      }
-    } catch (error) {
-      results.push({
-        clipId: clip.clipId,
-        ok: false,
-        message:
-          error instanceof Error ? error.message : "Unexpected publish error."
-      });
-    }
+    const result = await publishWayinVideoClipToTikTok({
+      projectId: input.projectId,
+      clip
+    });
+    results.push(result);
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
   }

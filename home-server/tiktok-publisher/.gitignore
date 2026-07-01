@@ -1,0 +1,5 @@
+# TikTok session cookies — export from browser, never commit
+cookies.txt
+.env
+.venv/
+__pycache__/

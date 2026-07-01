@@ -25,7 +25,8 @@ type CampaignStatus =
 type Campaign = {
   id: string;
   source_url: string;
-  opus_project_id: string | null;
+  clip_provider: string;
+  provider_project_id: string | null;
   status: CampaignStatus;
   error_message: string | null;
   created_at: string;
@@ -39,9 +40,13 @@ type Summary = {
 };
 
 type Settings = {
+  niche: string;
+  clip_provider: string;
   max_clips_per_source: number;
   posts_per_day: number;
   min_hours_between_posts: number;
+  sources_per_day: number;
+  max_source_duration_min: number;
   enabled: boolean;
 };
 
@@ -67,6 +72,10 @@ function statusLabel(status: CampaignStatus) {
   }
 }
 
+function providerLabel(provider: string) {
+  return provider === "supoclip" ? "SupoClip" : "WayinVideo";
+}
+
 export default function AutopilotDashboard() {
   const [siteUnlocked, setSiteUnlocked] = useState(false);
   const [sitePassword, setSitePassword] = useState("");
@@ -80,6 +89,7 @@ export default function AutopilotDashboard() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [clearingFailed, setClearingFailed] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -197,7 +207,7 @@ export default function AutopilotDashboard() {
       }
 
       setSourceUrl("");
-      setSuccessMessage("Queued — clipping and scheduling run in the background.");
+      setSuccessMessage("Queued manually — autopilot will clip and schedule posts.");
       await loadDashboard();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Submit failed.");
@@ -221,6 +231,44 @@ export default function AutopilotDashboard() {
     }
   }
 
+  async function handleClearFailed() {
+    if (!window.confirm("Delete all failed posts and failed campaigns from the monitor?")) {
+      return;
+    }
+
+    setClearingFailed(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const response = await authFetch("/api/autopilot/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true })
+      });
+
+      const data = (await response.json()) as {
+        ok?: boolean;
+        postsDeleted?: number;
+        campaignsDeleted?: number;
+        message?: string;
+      };
+
+      if (!data.ok) {
+        throw new Error(data.message ?? "Could not clear failed items.");
+      }
+
+      setSuccessMessage(
+        `Cleared ${data.postsDeleted ?? 0} failed post(s) and ${data.campaignsDeleted ?? 0} failed campaign(s).`
+      );
+      await loadDashboard();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Clear failed.");
+    } finally {
+      setClearingFailed(false);
+    }
+  }
+
   if (!siteUnlocked) {
     return (
       <PasswordGate
@@ -235,10 +283,12 @@ export default function AutopilotDashboard() {
   return (
     <SiteShell mode="autopilot" wide>
       <section className="opus-intro">
-        <h1>Paste a YouTube link. Autopilot handles the rest.</h1>
+        <h1>Shark Tank entrepreneurs on autopilot.</h1>
         <p>
-          OpusClip finds clips, schedules TikTok posts ({settings?.posts_per_day ?? 4}/day
-          max, {settings?.min_hours_between_posts ?? 3}h apart).
+          Discovers interview-style business videos (≤{settings?.max_source_duration_min ?? 20}{" "}
+          min), clips with {providerLabel(settings?.clip_provider ?? "wayinvideo")}, and posts
+          to TikTok about every {settings?.min_hours_between_posts ?? 1}h — up to{" "}
+          {settings?.sources_per_day ?? 4} new sources per day.
         </p>
       </section>
 
@@ -268,36 +318,14 @@ export default function AutopilotDashboard() {
         </div>
       </div>
 
-      <form className="opus-panel" onSubmit={handleSubmit}>
-        <label className="opus-label" htmlFor="source-url">
-          YouTube URL
-        </label>
-        <div className="opus-input-row">
-          <input
-            id="source-url"
-            className="opus-input opus-input-lg"
-            value={sourceUrl}
-            onChange={(event) => setSourceUrl(event.target.value)}
-            placeholder="https://www.youtube.com/watch?v=..."
-            autoFocus
-            disabled={submitting || settings?.enabled === false}
-          />
-          <button
-            type="submit"
-            className="opus-cta"
-            disabled={!sourceUrl.trim() || submitting || settings?.enabled === false}
-          >
-            {submitting ? "Queuing…" : "Queue"}
-          </button>
-        </div>
-      </form>
-
       <div className="opus-panel opus-resume">
         <div className="opus-row">
           <div>
             <h3>Autopilot {settings?.enabled ? "ON" : "PAUSED"}</h3>
             <p className="opus-hint">
-              Up to {settings?.max_clips_per_source ?? 4} clips per video
+              Provider: {providerLabel(settings?.clip_provider ?? "wayinvideo")} · Up to{" "}
+              {settings?.max_clips_per_source ?? 4} clips per source · Failed items auto-clear
+              after 7 days
             </p>
           </div>
           <button type="button" className="opus-secondary" onClick={toggleAutopilot}>
@@ -306,20 +334,44 @@ export default function AutopilotDashboard() {
         </div>
       </div>
 
+      <details className="opus-panel">
+        <summary className="opus-advanced-toggle">Manual override (optional)</summary>
+        <form className="opus-input-row" onSubmit={handleSubmit} style={{ marginTop: "1rem" }}>
+          <input
+            className="opus-input opus-input-lg"
+            value={sourceUrl}
+            onChange={(event) => setSourceUrl(event.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            disabled={submitting || settings?.enabled === false}
+          />
+          <button
+            type="submit"
+            className="opus-cta"
+            disabled={!sourceUrl.trim() || submitting || settings?.enabled === false}
+          >
+            {submitting ? "Queuing…" : "Queue URL"}
+          </button>
+        </form>
+      </details>
+
       <MonitorSection
         posts={monitorPosts}
         summary={monitorSummary}
         loading={loading}
+        onClearFailed={handleClearFailed}
+        clearingFailed={clearingFailed}
       />
 
       {campaigns.length > 0 ? (
         <section className="opus-panel">
           <h3>Recent sources</h3>
           <ul className="opus-campaign-list">
-            {campaigns.slice(0, 5).map((campaign) => (
+            {campaigns.slice(0, 8).map((campaign) => (
               <li key={campaign.id} className="opus-campaign-item">
                 <div>
-                  <strong>{statusLabel(campaign.status)}</strong>
+                  <strong>
+                    {statusLabel(campaign.status)} · {providerLabel(campaign.clip_provider)}
+                  </strong>
                   <p className="opus-hint opus-campaign-url">{campaign.source_url}</p>
                   {campaign.error_message ? (
                     <p className="opus-error">{campaign.error_message}</p>

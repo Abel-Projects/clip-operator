@@ -1,18 +1,18 @@
 import { buildAutopilotCaption } from "@/lib/autopilot/captions";
+import { cleanupStaleFailedRecords } from "@/lib/autopilot/cleanup";
+import {
+  countCampaignsCreatedToday,
+  discoverSourceVideo
+} from "@/lib/autopilot/discovery";
+import { getClipProvider, type ProviderClip } from "@/lib/autopilot/providers";
 import { getAutopilotSettings } from "@/lib/autopilot/settings";
 import {
   canPostNow,
   computeNextPostSlots,
   getDueScheduledPosts
 } from "@/lib/autopilot/scheduler";
-import {
-  createOpusClipProject,
-  getOpusClipProjectClips,
-  publishOpusClipToTikTok,
-  type OpusClipClip
-} from "@/lib/opusclip";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import type { CampaignRow } from "@/lib/supabase/types";
+import type { AutopilotSettingsRow, CampaignRow } from "@/lib/supabase/types";
 
 const MAX_CLIP_POLLS = 48;
 
@@ -22,7 +22,7 @@ export type AutopilotTickResult = {
   error?: string;
 };
 
-function rankClips(clips: OpusClipClip[]): OpusClipClip[] {
+function rankClips(clips: ProviderClip[]): ProviderClip[] {
   return [...clips].sort((a, b) => {
     const scoreA = a.score ?? -1;
     const scoreB = b.score ?? -1;
@@ -32,6 +32,10 @@ function rankClips(clips: OpusClipClip[]): OpusClipClip[] {
 
     return (b.durationSec ?? 0) - (a.durationSec ?? 0);
   });
+}
+
+function providerLabel(campaign: CampaignRow): string {
+  return campaign.clip_provider === "supoclip" ? "SupoClip" : "WayinVideo";
 }
 
 async function failCampaign(campaignId: string, message: string) {
@@ -44,17 +48,20 @@ async function failCampaign(campaignId: string, message: string) {
 
 async function processPendingCampaign(
   campaign: CampaignRow,
+  settings: AutopilotSettingsRow,
   actions: string[]
 ): Promise<void> {
-  const project = await createOpusClipProject({
-    videoUrl: campaign.source_url,
-    sourceLang: "auto",
-    clipDurationSec: 90
+  const provider = getClipProvider(campaign.clip_provider);
+  const project = await provider.startProject(campaign.source_url, {
+    maxClips: settings.max_clips_per_source,
+    projectName: campaign.niche
   });
 
   if (!project.ok) {
     await failCampaign(campaign.id, project.message);
-    actions.push(`Campaign ${campaign.id}: failed to start OpusClip — ${project.message}`);
+    actions.push(
+      `Campaign ${campaign.id}: failed to start ${provider.label} — ${project.message}`
+    );
     return;
   }
 
@@ -63,26 +70,29 @@ async function processPendingCampaign(
     .from("campaigns")
     .update({
       status: "clipping",
-      opus_project_id: project.projectId,
+      provider_project_id: project.projectId,
       poll_count: 0,
       error_message: null
     })
     .eq("id", campaign.id);
 
-  actions.push(`Campaign ${campaign.id}: started OpusClip project ${project.projectId}`);
+  actions.push(
+    `Campaign ${campaign.id}: started ${provider.label} project ${project.projectId}`
+  );
 }
 
 async function processClippingCampaign(
   campaign: CampaignRow,
   actions: string[]
 ): Promise<void> {
-  if (!campaign.opus_project_id) {
-    await failCampaign(campaign.id, "Missing OpusClip project ID.");
+  if (!campaign.provider_project_id) {
+    await failCampaign(campaign.id, "Missing provider project ID.");
     return;
   }
 
+  const provider = getClipProvider(campaign.clip_provider);
   const supabase = getSupabaseAdmin();
-  const clipsResult = await getOpusClipProjectClips(campaign.opus_project_id);
+  const clipsResult = await provider.getClips(campaign.provider_project_id);
 
   if (!clipsResult.ok) {
     await failCampaign(campaign.id, clipsResult.message);
@@ -90,12 +100,12 @@ async function processClippingCampaign(
     return;
   }
 
-  if (clipsResult.clips.length === 0) {
+  if (clipsResult.processing || clipsResult.clips.length === 0) {
     const nextPoll = campaign.poll_count + 1;
     if (nextPoll >= MAX_CLIP_POLLS) {
       await failCampaign(
         campaign.id,
-        "OpusClip did not return clips before the autopilot timeout."
+        `${providerLabel(campaign)} did not return clips before the autopilot timeout.`
       );
       actions.push(`Campaign ${campaign.id}: timed out waiting for clips`);
       return;
@@ -107,7 +117,7 @@ async function processClippingCampaign(
       .eq("id", campaign.id);
 
     actions.push(
-      `Campaign ${campaign.id}: waiting for clips (poll ${nextPoll}/${MAX_CLIP_POLLS})`
+      `Campaign ${campaign.id}: waiting for clips (${clipsResult.status}, poll ${nextPoll}/${MAX_CLIP_POLLS})`
     );
     return;
   }
@@ -128,7 +138,7 @@ async function processClippingCampaign(
 
   const clipRows = selected.map((clip, index) => ({
     campaign_id: campaign.id,
-    opus_clip_id: clip.clipId,
+    provider_clip_id: clip.clipId,
     title: clip.title ?? null,
     score: clip.score ?? null,
     duration_sec: clip.durationSec ?? null,
@@ -160,8 +170,8 @@ async function processSchedulingCampaign(
   campaign: CampaignRow,
   actions: string[]
 ): Promise<void> {
-  if (!campaign.opus_project_id) {
-    await failCampaign(campaign.id, "Missing OpusClip project ID.");
+  if (!campaign.provider_project_id) {
+    await failCampaign(campaign.id, "Missing provider project ID.");
     return;
   }
 
@@ -194,8 +204,8 @@ async function processSchedulingCampaign(
     return {
       campaign_id: campaign.id,
       campaign_clip_id: clip.id,
-      opus_project_id: campaign.opus_project_id!,
-      opus_clip_id: clip.opus_clip_id,
+      provider_project_id: campaign.provider_project_id!,
+      provider_clip_id: clip.provider_clip_id,
       scheduled_at: slots[index]!.toISOString(),
       status: "queued" as const,
       caption_title: caption.title,
@@ -216,12 +226,14 @@ async function processSchedulingCampaign(
     .eq("id", campaign.id);
 
   actions.push(
-    `Campaign ${campaign.id}: queued ${posts.length} TikTok post(s) with ${settings.min_hours_between_posts}h spacing`
+    `Campaign ${campaign.id}: queued ${posts.length} TikTok post(s), ${settings.min_hours_between_posts}h apart`
   );
 }
 
-async function processDuePosts(actions: string[]): Promise<void> {
-  const settings = await getAutopilotSettings();
+async function processDuePosts(
+  settings: AutopilotSettingsRow,
+  actions: string[]
+): Promise<void> {
   if (!settings.enabled) {
     return;
   }
@@ -230,13 +242,38 @@ async function processDuePosts(actions: string[]): Promise<void> {
     return;
   }
 
-  const due = await getDueScheduledPosts(1);
+  const due = await getDueScheduledPosts(10);
   if (due.length === 0) {
     return;
   }
 
-  const post = due[0]!;
   const supabase = getSupabaseAdmin();
+  let post: (typeof due)[number] | null = null;
+  let campaign: CampaignRow | null = null;
+
+  for (const candidate of due) {
+    const { data: row } = await supabase
+      .from("campaigns")
+      .select("*")
+      .eq("id", candidate.campaign_id)
+      .maybeSingle();
+
+    if (!row) {
+      continue;
+    }
+
+    if (row.clip_provider === "supoclip") {
+      continue;
+    }
+
+    post = candidate;
+    campaign = row;
+    break;
+  }
+
+  if (!post || !campaign) {
+    return;
+  }
 
   await supabase
     .from("scheduled_posts")
@@ -254,15 +291,18 @@ async function processDuePosts(actions: string[]): Promise<void> {
     description: post.caption_description ?? clipRow?.title
   });
 
-  const result = await publishOpusClipToTikTok({
-    projectId: post.opus_project_id,
-    clip: {
-      id: `${post.opus_project_id}.${post.opus_clip_id}`,
-      clipId: post.opus_clip_id,
+  const provider = getClipProvider(campaign.clip_provider);
+  const publishIndex = Number(post.provider_clip_id);
+  const result = await provider.publishClip(
+    post.provider_project_id,
+    {
+      clipId: post.provider_clip_id,
       title: caption.title,
-      description: caption.description
-    }
-  });
+      publishIndex: Number.isFinite(publishIndex) ? publishIndex : undefined,
+      previewUrl: clipRow?.preview_url ?? undefined
+    },
+    caption
+  );
 
   if (result.ok) {
     await supabase
@@ -276,7 +316,7 @@ async function processDuePosts(actions: string[]): Promise<void> {
       })
       .eq("id", post.id);
 
-    actions.push(`Posted clip ${post.opus_clip_id} to TikTok`);
+    actions.push(`Posted clip ${post.provider_clip_id} to TikTok via ${provider.label}`);
   } else {
     await supabase
       .from("scheduled_posts")
@@ -286,7 +326,7 @@ async function processDuePosts(actions: string[]): Promise<void> {
       })
       .eq("id", post.id);
 
-    actions.push(`Failed to post clip ${post.opus_clip_id}: ${result.message}`);
+    actions.push(`Failed to post clip ${post.provider_clip_id}: ${result.message}`);
   }
 }
 
@@ -315,6 +355,37 @@ async function finalizeActiveCampaigns(actions: string[]): Promise<void> {
   }
 }
 
+async function maybeDiscoverAndQueue(
+  settings: AutopilotSettingsRow,
+  actions: string[]
+): Promise<void> {
+  if (!process.env.YOUTUBE_API_KEY?.trim()) {
+    actions.push("Discovery skipped: set YOUTUBE_API_KEY on Vercel");
+    return;
+  }
+
+  const createdToday = await countCampaignsCreatedToday();
+  if (createdToday >= settings.sources_per_day) {
+    return;
+  }
+
+  const discovered = await discoverSourceVideo(settings);
+  if (!discovered) {
+    actions.push("Discovery: no new videos matched filters");
+    return;
+  }
+
+  await createCampaign({
+    sourceUrl: discovered.url,
+    clipProvider: settings.clip_provider,
+    niche: settings.niche ?? "shark_tank_entrepreneurs"
+  });
+
+  actions.push(
+    `Discovered: "${discovered.title}" (${Math.round(discovered.durationSec / 60)}m) from ${discovered.channelTitle}`
+  );
+}
+
 export async function runAutopilotTick(): Promise<AutopilotTickResult> {
   const actions: string[] = [];
 
@@ -334,7 +405,7 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
       .limit(1);
 
     if (pending?.[0]) {
-      await processPendingCampaign(pending[0], actions);
+      await processPendingCampaign(pending[0], settings, actions);
       return { ok: true, actions };
     }
 
@@ -362,8 +433,23 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
       return { ok: true, actions };
     }
 
-    await processDuePosts(actions);
+    await processDuePosts(settings, actions);
     await finalizeActiveCampaigns(actions);
+
+    try {
+      const cleaned = await cleanupStaleFailedRecords();
+      if (cleaned.postsDeleted > 0 || cleaned.campaignsDeleted > 0) {
+        actions.push(
+          `Cleanup: removed ${cleaned.postsDeleted} failed post(s), ${cleaned.campaignsDeleted} failed campaign(s) older than 7 days`
+        );
+      }
+    } catch (error) {
+      actions.push(
+        `Cleanup skipped: ${error instanceof Error ? error.message : "unknown error"}`
+      );
+    }
+
+    await maybeDiscoverAndQueue(settings, actions);
 
     if (actions.length === 0) {
       actions.push("No work due");
@@ -381,13 +467,18 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
 
 export async function createCampaign(input: {
   sourceUrl: string;
+  clipProvider?: string;
+  niche?: string;
 }): Promise<CampaignRow> {
   const supabase = getSupabaseAdmin();
+  const settings = await getAutopilotSettings();
 
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
       source_url: input.sourceUrl.trim(),
+      clip_provider: input.clipProvider ?? settings.clip_provider ?? "wayinvideo",
+      niche: input.niche ?? settings.niche ?? "shark_tank_entrepreneurs",
       status: "pending"
     })
     .select("*")

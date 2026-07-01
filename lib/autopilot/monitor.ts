@@ -13,8 +13,8 @@ export type MonitorPost = {
   postedAt: string | null;
   captionTitle: string | null;
   errorMessage: string | null;
-  opusClipId: string;
-  opusProjectId: string;
+  providerClipId: string;
+  providerProjectId: string;
   views: number | null;
   likes: number | null;
   comments: number | null;
@@ -31,7 +31,7 @@ export type MonitorPost = {
     id: string;
     sourceUrl: string;
     status: CampaignRow["status"];
-    opusProjectId: string | null;
+    providerProjectId: string | null;
   } | null;
 };
 
@@ -96,8 +96,8 @@ export async function getMonitorFeed(limit = 50): Promise<{
       postedAt: row.posted_at,
       captionTitle: row.caption_title,
       errorMessage: row.error_message,
-      opusClipId: row.opus_clip_id,
-      opusProjectId: row.opus_project_id,
+      providerClipId: row.provider_clip_id,
+      providerProjectId: row.provider_project_id,
       views: row.views ?? null,
       likes: row.likes ?? null,
       comments: row.comments ?? null,
@@ -117,7 +117,7 @@ export async function getMonitorFeed(limit = 50): Promise<{
             id: campaign.id,
             sourceUrl: campaign.source_url,
             status: campaign.status,
-            opusProjectId: campaign.opus_project_id
+            providerProjectId: campaign.provider_project_id
           }
         : null
     };

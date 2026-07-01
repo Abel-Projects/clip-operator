@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Clip Operator",
-  description: "Compare OpusClip and WayinVideo clipping workflows."
+  description: "Compare WayinVideo and SupoClip clipping workflows."
 };
 
 export default function ClipLayout({

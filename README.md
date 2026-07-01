@@ -1,91 +1,78 @@
 # Clip Operator
 
-**Autopilot** (default): paste a YouTube URL → OpusClip clips → best moments scheduled to TikTok with safe spacing.
+**Autopilot** (default): discovers entrepreneur / Shark Tank–adjacent YouTube interviews → **WayinVideo** clips → best moments scheduled to **TikTok** (1 post/hour by default).
 
-**Manual mode** (`/workbench`): compare OpusClip, WayinVideo, and SupoClip side by side.
+**Manual mode** (`/workbench`): compare **WayinVideo** and **SupoClip** side by side.
 
 Hosted on **Vercel**: `https://clip-operator.vercel.app` (password-protected via `APP_PASSWORD`).
 
 ## Autopilot flow
 
-1. You paste a YouTube URL
-2. Background worker starts an **OpusClip** project
-3. When clips are ready, autopilot keeps the **top 4** (configurable) by score
-4. Posts are **queued to TikTok** with spacing (default **4/day max**, **3 hours** between posts)
-5. Vercel cron runs every **5 minutes** to advance clipping and publish due posts
+1. Cron discovers up to **4** new YouTube sources per day (≤20 min, interview-style; blocks full episodes/compilations)
+2. **WayinVideo** clips each source (up to **4** clips per video by score)
+3. Posts are **queued to TikTok** via WayinVideo (~**1/hour** spacing)
+4. Vercel cron (or [cron-job.org](scripts/cron-job.org.txt)) hits `/api/cron/autopilot` every few minutes
+
+Switch clipper + TikTok posting:
+
+- **WayinVideo** (default) — cloud API clips + TikTok via WayinVideo
+- **SupoClip** — self-hosted clips on your home server + **free TikTok** via [home-server/tiktok-publisher](home-server/tiktok-publisher) (Playwright + cookies, no paid API)
+
+```sql
+update autopilot_settings set clip_provider = 'supoclip' where id = 1;
+```
+
 
 ## Setup
 
-### 1. Supabase (new project recommended)
+### 1. Supabase
 
-Create a free project at [supabase.com](https://supabase.com) (dedicated to Clip Operator — do not reuse production app DB).
+Run migrations in order in **SQL Editor**:
 
-1. **SQL Editor** → run `supabase/migrations/20250628000000_autopilot.sql`
-2. **Project Settings → API** → copy:
-   - Project URL → `SUPABASE_URL`
-   - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server only, never expose to browser)
+1. `supabase/migrations/20250628000000_autopilot.sql`
+2. `supabase/migrations/20250629000000_post_metrics.sql`
+3. `supabase/migrations/20250630000000_wayinvideo_autopilot.sql`
 
-### 2. Environment variables
-
-```bash
-pnpm install
-cp .env.example .env.local
-```
+### 2. Environment variables (Vercel + `.env.local`)
 
 | Variable | Required |
 |----------|----------|
-| `OPUSCLIP_API_KEY` | Yes |
-| `SUPABASE_URL` | Yes (autopilot) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes (autopilot) |
-| `CRON_SECRET` | Yes on Vercel (random string) |
+| `WAYINVIDEO_API_KEY` | Yes (autopilot clipping + TikTok post) |
+| `YOUTUBE_API_KEY` | Yes (autopilot discovery) |
+| `SUPABASE_URL` | Yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes |
+| `CRON_SECRET` | Yes on Vercel |
 | `APP_PASSWORD` | Recommended |
+| `SUPOCLIP_*` | SupoClip provider + home-server publisher |
+| `PUBLISH_AGENT_SECRET` | Optional; home-server TikTok agent auth (defaults to `CRON_SECRET`) |
 
-TikTok must be connected in **OpusClip** (or set `OPUSCLIP_POST_ACCOUNT_ID` / `OPUSCLIP_SUB_ACCOUNT_ID`).
+TikTok must be connected in **WayinVideo** (or set `WAYINVIDEO_TIKTOK_ACCOUNT_ID`).
 
 ### 3. Local dev
 
 ```bash
+pnpm install
+cp .env.example .env.local
 pnpm dev
 ```
 
-Open **http://localhost:3000** (autopilot). **Monitor:** `/monitor`. Manual compare UI: `/workbench`
-
-Trigger the background worker locally:
+Trigger the worker locally:
 
 ```bash
-curl -X POST http://localhost:3000/api/cron/autopilot
+curl -X POST http://localhost:3000/api/cron/autopilot -H "Authorization: Bearer $CRON_SECRET"
 ```
 
-### 4. Deploy (Vercel)
+### 4. Deploy
 
-1. Import **Abel-Projects/clip-operator**
-2. Set all env vars above (including `CRON_SECRET`)
-3. Deploy — cron is configured in `vercel.json` (`*/5 * * * *`)
+Set env vars on Vercel and deploy. Use [cron-job.org](scripts/cron-job.org.txt) if Hobby plan limits Vercel cron.
 
-> **Note:** Vercel Hobby may limit cron frequency. If cron does not run every 5 minutes, upgrade to Pro or call `/api/cron/autopilot` from an external scheduler (e.g. cron-job.org) with `Authorization: Bearer <CRON_SECRET>`.
+## Default niche
 
-## Posting limits (safe defaults)
+**Shark Tank entrepreneurs** — interviews with investors (Mark Cuban, Barbara Corcoran, etc.) and related founder content. Not full Shark Tank episodes.
 
-| Setting | Default | Max in UI |
-|---------|---------|-----------|
-| Clips per YouTube video | 4 | 8 |
-| Posts per day | 4 | 6 |
-| Min hours between posts | 3 | 12 (min 2) |
-
-These reduce TikTok spam/shadowban risk while staying aggressive. Tune via `/api/autopilot/settings` or extend the dashboard later.
+Tune keywords/channels in `autopilot_settings.discovery_keywords` / `discovery_channels`.
 
 ## Manual providers
 
-### SupoClip (local)
-
-```bash
-pnpm supoclip
-```
-
-See previous README section for SupoClip Docker setup. SupoClip has no TikTok autopost in Clip Operator.
-
-## Notes
-
-- Autopilot uses **OpusClip only** (WayinVideo remains in manual workbench).
-- File upload is disabled on Vercel; autopilot expects **YouTube URLs**.
-- Phase 2 (TikTok metrics sync, auto-delete losers) — `/monitor` shows clip/post data now; view counts fill in once TikTok sync is added.
+- **WayinVideo** — cloud API + TikTok
+- **SupoClip** — self-hosted (`SUPOCLIP_*` env); manual workbench + autopilot with [home-server TikTok publisher](home-server/tiktok-publisher/README.md)

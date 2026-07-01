@@ -11,7 +11,7 @@ import {
   storeSitePassword
 } from "@/lib/client-auth";
 
-type Provider = "opusclip" | "wayinvideo" | "supoclip";
+type Provider = "wayinvideo" | "supoclip";
 
 type IntegrationStatus = {
   configured: boolean;
@@ -59,13 +59,6 @@ const PROVIDERS: {
     supportsTikTok: true
   },
   {
-    id: "opusclip",
-    label: "OpusClip",
-    hint: "Hosted OpusClip API",
-    logo: "/logos/opusclip.png",
-    supportsTikTok: true
-  },
-  {
     id: "supoclip",
     label: "SupoClip",
     hint: "Self-hosted open-source clipper",
@@ -75,18 +68,13 @@ const PROVIDERS: {
 ];
 
 const PROVIDER_ENV_KEYS: Record<Provider, string> = {
-  opusclip: "OPUSCLIP_API_KEY",
   wayinvideo: "WAYINVIDEO_API_KEY",
   supoclip: "SUPOCLIP_USER_ID"
 };
 
 function parseInitialProvider(searchParams: URLSearchParams): Provider {
   const requested = searchParams.get("provider");
-  if (
-    requested === "opusclip" ||
-    requested === "wayinvideo" ||
-    requested === "supoclip"
-  ) {
+  if (requested === "wayinvideo" || requested === "supoclip") {
     return requested;
   }
 
@@ -375,15 +363,7 @@ export default function ClipWorkbench() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      if (provider === "opusclip") {
-        formData.append("sourceLang", "auto");
-        if (topicList.length > 0) {
-          formData.append("topicKeywords", topicList.join(", "));
-        }
-        if (clipDuration) {
-          formData.append("clipDurationSec", String(clipDuration));
-        }
-      } else if (provider === "supoclip") {
+      if (provider === "supoclip") {
         if (topicList.length > 0) {
           formData.append("projectName", topicList.join(", "));
         }
@@ -404,22 +384,17 @@ export default function ClipWorkbench() {
     }
 
     const body =
-      provider === "opusclip"
+      provider === "supoclip"
         ? {
             videoUrl: videoUrl.trim(),
-            topicKeywords: topicList,
-            clipDurationSec: clipDuration,
-            sourceLang: "auto"
+            projectName: topicList.join(", ") || undefined,
+            processingMode: "fast" as const
           }
-        : provider === "supoclip"
-          ? {
-              videoUrl: videoUrl.trim(),
-              projectName: topicList.join(", ") || undefined
-            }
-          : {
-              videoUrl: videoUrl.trim(),
-              projectName: topicList.join(", ") || undefined
-            };
+        : {
+            videoUrl: videoUrl.trim(),
+            projectName: topicList.join(", ") || undefined,
+            targetDuration: "DURATION_0_90"
+          };
 
     const response = await authFetch(`${apiBase}/project`, {
       method: "POST",
@@ -575,7 +550,7 @@ export default function ClipWorkbench() {
       <section className="opus-intro">
         <h1>Compare clipping APIs side by side.</h1>
         <p>
-          Pick OpusClip, WayinVideo, or SupoClip — paste a link or upload, then run the
+          Pick WayinVideo or SupoClip — paste a link or upload, then run the
           workflow yourself.
         </p>
       </section>
@@ -746,20 +721,7 @@ export default function ClipWorkbench() {
                 onChange={(event) => setTopicKeywords(event.target.value)}
                 placeholder="launch, interview, product demo"
               />
-              {provider === "opusclip" ? (
-                <>
-                  <label className="opus-label" htmlFor="clip-duration">
-                    Max clip length (seconds)
-                  </label>
-                  <input
-                    id="clip-duration"
-                    className="opus-input opus-input-short"
-                    value={clipDurationSec}
-                    onChange={(event) => setClipDurationSec(event.target.value)}
-                    inputMode="numeric"
-                  />
-                </>
-              ) : provider === "supoclip" ? (
+              {provider === "supoclip" ? (
                 <p className="opus-hint">
                   SupoClip runs locally via Docker. Clips render with subtitles in
                   fast mode by default.
@@ -791,7 +753,7 @@ export default function ClipWorkbench() {
             from the WayinVideo website URL.
           </p>
           <label className="opus-label" htmlFor="existing-project-id">
-            {provider === "wayinvideo" ? "API project ID or URL" : provider === "supoclip" ? "Task ID" : "Project ID"}
+            {provider === "wayinvideo" ? "API project ID or URL" : "Task ID"}
           </label>
           <input
             id="existing-project-id"
@@ -801,9 +763,7 @@ export default function ClipWorkbench() {
             placeholder={
               provider === "wayinvideo"
                 ? "prj06… or paste wayin.ai/wayinvideo/video/… URL"
-                : provider === "supoclip"
-                  ? "SupoClip task UUID"
-                  : "P0000000..."
+                : "SupoClip task UUID"
             }
           />
           <p className="opus-hint">
@@ -817,7 +777,7 @@ export default function ClipWorkbench() {
                 </a>{" "}
                 directly.
               </>
-            ) : provider === "supoclip" ? (
+            ) : (
               <>
                 Paste the SupoClip task ID returned by Clip Operator or from{" "}
                 <a href="http://localhost:3107" target="_blank" rel="noreferrer">
@@ -825,8 +785,6 @@ export default function ClipWorkbench() {
                 </a>
                 .
               </>
-            ) : (
-              "Find it in your OpusClip dashboard project URL."
             )}
           </p>
           <button
@@ -855,8 +813,8 @@ export default function ClipWorkbench() {
               : provider === "wayinvideo"
                 ? "WayinVideo finds viral moments, reframes to vertical, and renders captioned clips."
                 : provider === "supoclip"
-                  ? "SupoClip transcribes locally, scores moments, and renders vertical clips with subtitles."
-                  : "OpusClip transcribes the video, finds viral moments, and renders vertical clips with captions."}
+                ? "SupoClip transcribes locally, scores moments, and renders vertical clips with subtitles."
+                : "WayinVideo is processing your video."}
           </p>
           {projectId && phase !== "submitting" ? (
             <p className="opus-hint">Project: {projectId}</p>
