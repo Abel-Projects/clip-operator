@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-type AppMode = "autopilot" | "manual";
+type AppMode = "autopilot" | "manual" | "supoclip";
 
 type ModeSwitchProps = {
   active: AppMode;
@@ -26,6 +26,14 @@ export default function ModeSwitch({ active }: ModeSwitchProps) {
         className={`opus-mode-tab ${active === "manual" ? "active" : ""}`}
       >
         Manual
+      </Link>
+      <Link
+        href="/supoclip"
+        role="tab"
+        aria-selected={active === "supoclip"}
+        className={`opus-mode-tab ${active === "supoclip" ? "active" : ""}`}
+      >
+        SupoClip
       </Link>
     </div>
   );

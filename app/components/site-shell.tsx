@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import ModeSwitch from "./mode-switch";
 
-type AppMode = "autopilot" | "manual";
+type AppMode = "autopilot" | "manual" | "supoclip";
 
 type SiteShellProps = {
   mode: AppMode;
