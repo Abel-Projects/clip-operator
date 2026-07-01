@@ -97,7 +97,7 @@ export default function SupoClipEmbed({
             ) : null}
             <iframe
               className="opus-embed-frame"
-              src={frontendUrl}
+              src={`${frontendUrl}${frontendUrl.includes("?") ? "&" : "?"}embed=1`}
               title="SupoClip"
               allow="clipboard-read; clipboard-write"
             />

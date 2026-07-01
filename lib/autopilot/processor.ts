@@ -1,4 +1,4 @@
-import { buildAutopilotCaption } from "@/lib/autopilot/captions";
+import { buildAutopilotCaption, generateAutopilotCaption } from "@/lib/autopilot/captions";
 import { cleanupStaleFailedRecords } from "@/lib/autopilot/cleanup";
 import {
   countCampaignsCreatedToday,
@@ -196,23 +196,25 @@ async function processSchedulingCampaign(
     settings
   });
 
-  const posts = clips.map((clip, index) => {
-    const caption = buildAutopilotCaption({
-      title: clip.title,
-      description: clip.title
-    });
+  const posts = await Promise.all(
+    clips.map(async (clip, index) => {
+      const caption = await generateAutopilotCaption({
+        transcript: clip.title ?? "",
+        niche: settings.niche
+      });
 
-    return {
-      campaign_id: campaign.id,
-      campaign_clip_id: clip.id,
-      provider_project_id: campaign.provider_project_id!,
-      provider_clip_id: clip.provider_clip_id,
-      scheduled_at: slots[index]!.toISOString(),
-      status: "queued" as const,
-      caption_title: caption.title,
-      caption_description: caption.description
-    };
-  });
+      return {
+        campaign_id: campaign.id,
+        campaign_clip_id: clip.id,
+        provider_project_id: campaign.provider_project_id!,
+        provider_clip_id: clip.provider_clip_id,
+        scheduled_at: slots[index]!.toISOString(),
+        status: "queued" as const,
+        caption_title: caption.title,
+        caption_description: caption.description
+      };
+    })
+  );
 
   const { error: postError } = await supabase.from("scheduled_posts").insert(posts);
 

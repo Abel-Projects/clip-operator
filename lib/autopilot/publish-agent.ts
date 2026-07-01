@@ -71,8 +71,19 @@ function truncateForTikTok(text: string, max = 150): string {
 }
 
 function formatTikTokCaption(caption: { title: string; description: string }): string {
-  const hook = truncateForTikTok(caption.title || caption.description);
-  return `${hook}\n\n#sharktank #entrepreneur #business #startup`;
+  const hook = truncateForTikTok(caption.title.split("\n")[0] ?? caption.title, 150);
+  const bodyLine = caption.title.includes("\n")
+    ? truncateForTikTok(caption.title.split("\n").slice(1).join(" ").trim(), 80)
+    : "";
+  const tags = caption.description.includes("#")
+    ? caption.description.trim()
+    : "#sharktank #entrepreneur #business #startup";
+
+  if (bodyLine) {
+    return `${hook}\n${bodyLine}\n\n${tags}`;
+  }
+
+  return `${hook}\n\n${tags}`;
 }
 
 export async function recoverStalePostingJobs(): Promise<number> {
