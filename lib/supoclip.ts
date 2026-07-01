@@ -54,6 +54,9 @@ export type SupoClipClipsResult =
 
 export type SupoClipIntegrationStatus = {
   configured: boolean;
+  /** True when env is set enough to embed the SupoClip UI iframe. */
+  canEmbed: boolean;
+  backendReachable: boolean;
   baseUrl: string;
   frontendUrl: string;
   hasTikTokAccount: boolean;
@@ -294,9 +297,12 @@ async function createSupoClipTask(
 
 export function getSupoClipStatus(): SupoClipIntegrationStatus {
   const config = getConfig();
+  const hasEnv = Boolean(config);
 
   return {
-    configured: Boolean(config),
+    configured: hasEnv,
+    canEmbed: hasEnv,
+    backendReachable: false,
     baseUrl: config?.baseUrl ?? DEFAULT_BASE_URL,
     frontendUrl: config?.frontendUrl ?? DEFAULT_FRONTEND_URL,
     hasTikTokAccount: false
@@ -319,17 +325,22 @@ export async function getSupoClipIntegrationStatus(): Promise<SupoClipIntegratio
     if (!response.ok) {
       return {
         ...status,
-        configured: false
+        configured: false,
+        backendReachable: false
       };
     }
+
+    return {
+      ...status,
+      backendReachable: true
+    };
   } catch {
     return {
       ...status,
-      configured: false
+      configured: false,
+      backendReachable: false
     };
   }
-
-  return status;
 }
 
 export async function createSupoClipProject(

@@ -16,7 +16,8 @@ export default async function SupoClipPage() {
       }
     >
       <SupoClipEmbed
-        configured={status.configured}
+        canEmbed={status.canEmbed}
+        backendReachable={status.backendReachable}
         frontendUrl={status.frontendUrl}
       />
     </Suspense>

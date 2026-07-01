@@ -12,12 +12,14 @@ import {
 
 type SupoClipEmbedProps = {
   frontendUrl: string;
-  configured: boolean;
+  canEmbed: boolean;
+  backendReachable: boolean;
 };
 
 export default function SupoClipEmbed({
   frontendUrl,
-  configured
+  canEmbed,
+  backendReachable
 }: SupoClipEmbedProps) {
   const [siteUnlocked, setSiteUnlocked] = useState(false);
   const [sitePassword, setSitePassword] = useState("");
@@ -80,18 +82,26 @@ export default function SupoClipEmbed({
           Full SupoClip editor on your home server. Clipping API is wired for autopilot;
           TikTok posts run via the home-server agent.
         </p>
-        {!configured ? (
+        {!canEmbed ? (
           <div className="opus-alert" role="alert">
             Set <code>SUPOCLIP_FRONTEND_URL</code> and <code>SUPOCLIP_USER_ID</code> on
             Vercel to load the editor.
           </div>
         ) : (
-          <iframe
-            className="opus-embed-frame"
-            src={frontendUrl}
-            title="SupoClip"
-            allow="clipboard-read; clipboard-write"
-          />
+          <>
+            {!backendReachable ? (
+              <div className="opus-alert" role="alert">
+                SupoClip API tunnel may be down — autopilot clipping won&apos;t work until{" "}
+                <code>SUPOCLIP_BASE_URL</code> is updated. The editor may still load below.
+              </div>
+            ) : null}
+            <iframe
+              className="opus-embed-frame"
+              src={frontendUrl}
+              title="SupoClip"
+              allow="clipboard-read; clipboard-write"
+            />
+          </>
         )}
       </section>
     </SiteShell>
