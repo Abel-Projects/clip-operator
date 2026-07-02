@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatDuration, formatMetric, formatRelative } from "@/lib/format";
 
 export type PostStatus = "queued" | "posting" | "posted" | "failed";
 
@@ -41,22 +42,6 @@ type MonitorSectionProps = {
   clearingFailed?: boolean;
 };
 
-function formatWhen(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString();
-}
-
-function formatDuration(seconds: number | null | undefined) {
-  if (!seconds) return "—";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.round(seconds % 60);
-  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-}
-
-function formatMetric(value: number | null) {
-  return value == null ? "—" : value.toLocaleString();
-}
-
 function statusClass(status: PostStatus) {
   switch (status) {
     case "posted":
@@ -67,6 +52,19 @@ function statusClass(status: PostStatus) {
       return "active";
     default:
       return "";
+  }
+}
+
+function statusLabel(status: PostStatus) {
+  switch (status) {
+    case "posted":
+      return "Posted";
+    case "posting":
+      return "Posting…";
+    case "failed":
+      return "Failed";
+    default:
+      return "Queued";
   }
 }
 
@@ -85,11 +83,8 @@ export default function MonitorSection({
     <section className="opus-panel opus-monitor" id="monitor">
       <div className="opus-section-head">
         <div>
-          <h2>Monitor</h2>
-          <p className="opus-hint">
-            Clips queued and posted — scores, previews, and source videos. TikTok views
-            sync coming soon.
-          </p>
+          <h2>Recent posts</h2>
+          <p className="opus-hint">Everything the machine has clipped and sent to TikTok.</p>
         </div>
         {summary ? (
           <div className="opus-monitor-mini-stats">
@@ -110,12 +105,6 @@ export default function MonitorSection({
         ) : null}
       </div>
 
-      {summary && summary.metricsPending > 0 ? (
-        <p className="opus-hint">
-          {summary.metricsPending} posted clip(s) waiting for TikTok metrics.
-        </p>
-      ) : null}
-
       <div className="opus-filter-row">
         {(["all", "posted", "queued", "failed"] as const).map((entry) => (
           <button
@@ -131,63 +120,66 @@ export default function MonitorSection({
 
       {loading ? <p className="opus-hint">Loading clips…</p> : null}
       {!loading && visiblePosts.length === 0 ? (
-        <p className="opus-hint">No clips yet. Autopilot will discover sources when enabled.</p>
+        <p className="opus-hint">
+          Nothing here yet. When autopilot is on it discovers sources, clips them, and posts
+          automatically.
+        </p>
       ) : null}
 
       {!loading && visiblePosts.length > 0 ? (
-        <div className="opus-table-wrap">
-          <table className="opus-table">
-            <thead>
-              <tr>
-                <th>Status</th>
-                <th>Clip</th>
-                <th>Score</th>
-                <th>Length</th>
-                <th>Scheduled</th>
-                <th>Posted</th>
-                <th>Views</th>
-                <th>Likes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visiblePosts.map((post) => (
-                <tr key={post.id}>
-                  <td>
-                    <span className={`opus-pill ${statusClass(post.status)}`}>
-                      {post.status}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="opus-table-clip">
-                      {post.clip?.previewUrl ? (
-                        <a
-                          href={post.clip.previewUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="opus-table-preview"
-                        >
-                          Preview
-                        </a>
-                      ) : null}
-                      <span>{post.captionTitle ?? post.clip?.title ?? post.providerClipId}</span>
-                    </div>
-                    {post.campaign?.sourceUrl ? (
-                      <p className="opus-hint opus-table-source">{post.campaign.sourceUrl}</p>
-                    ) : null}
-                    {post.errorMessage ? (
-                      <p className="opus-error opus-table-error">{post.errorMessage}</p>
-                    ) : null}
-                  </td>
-                  <td>{post.clip?.score ?? "—"}</td>
-                  <td>{formatDuration(post.clip?.durationSec)}</td>
-                  <td>{formatWhen(post.scheduledAt)}</td>
-                  <td>{formatWhen(post.postedAt)}</td>
-                  <td>{formatMetric(post.views)}</td>
-                  <td>{formatMetric(post.likes)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="opus-post-grid">
+          {visiblePosts.map((post) => {
+            const title = post.captionTitle ?? post.clip?.title ?? post.providerClipId;
+            const when =
+              post.status === "posted"
+                ? `Posted ${formatRelative(post.postedAt)}`
+                : `Scheduled ${formatRelative(post.scheduledAt)}`;
+
+            return (
+              <article key={post.id} className={`opus-post-card ${statusClass(post.status)}`}>
+                <div className="opus-post-card-head">
+                  <span className={`opus-pill ${statusClass(post.status)}`}>
+                    {statusLabel(post.status)}
+                  </span>
+                  {post.clip?.previewUrl ? (
+                    <a
+                      href={post.clip.previewUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="opus-post-preview"
+                    >
+                      Preview ↗
+                    </a>
+                  ) : null}
+                </div>
+
+                <p className="opus-post-title">{title}</p>
+
+                {post.campaign?.sourceUrl ? (
+                  <p className="opus-hint opus-post-source">{post.campaign.sourceUrl}</p>
+                ) : null}
+
+                {post.errorMessage ? (
+                  <p className="opus-error opus-post-error">{post.errorMessage}</p>
+                ) : null}
+
+                <div className="opus-post-meta">
+                  <span>{when}</span>
+                  {post.clip?.durationSec ? (
+                    <span>· {formatDuration(post.clip.durationSec)}</span>
+                  ) : null}
+                  {post.clip?.score != null ? <span>· score {post.clip.score}</span> : null}
+                </div>
+
+                {post.status === "posted" ? (
+                  <div className="opus-post-metrics">
+                    <span>{formatMetric(post.views)} views</span>
+                    <span>{formatMetric(post.likes)} likes</span>
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       ) : null}
     </section>

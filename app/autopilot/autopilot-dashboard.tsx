@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import MonitorSection, {
   type MonitorPost,
@@ -13,24 +14,7 @@ import {
   getStoredSitePassword,
   storeSitePassword
 } from "@/lib/client-auth";
-
-type CampaignStatus =
-  | "pending"
-  | "clipping"
-  | "scheduling"
-  | "active"
-  | "done"
-  | "failed";
-
-type Campaign = {
-  id: string;
-  source_url: string;
-  clip_provider: string;
-  provider_project_id: string | null;
-  status: CampaignStatus;
-  error_message: string | null;
-  created_at: string;
-};
+import { formatRelative, humanizeNiche, providerLabel } from "@/lib/format";
 
 type Summary = {
   pendingCampaigns: number;
@@ -38,17 +22,6 @@ type Summary = {
   postedToday: number;
   nextPostAt: string | null;
 };
-
-function formatPostInterval(hours: number): string {
-  if (hours < 1) {
-    const minutes = Math.round(hours * 60);
-    return `${minutes}m`;
-  }
-  if (Number.isInteger(hours)) {
-    return `${hours}h`;
-  }
-  return `${Math.round(hours * 60)}m`;
-}
 
 type Settings = {
   niche: string;
@@ -61,39 +34,12 @@ type Settings = {
   enabled: boolean;
 };
 
-function formatWhen(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString();
-}
-
-function statusLabel(status: CampaignStatus) {
-  switch (status) {
-    case "pending":
-      return "Queued";
-    case "clipping":
-      return "Clipping";
-    case "scheduling":
-      return "Scheduling";
-    case "active":
-      return "Posting";
-    case "done":
-      return "Done";
-    case "failed":
-      return "Failed";
-  }
-}
-
-function providerLabel(provider: string) {
-  return provider === "supoclip" ? "SupoClip" : "WayinVideo";
-}
-
 export default function AutopilotDashboard() {
   const [siteUnlocked, setSiteUnlocked] = useState(false);
   const [sitePassword, setSitePassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
   const [sourceUrl, setSourceUrl] = useState("");
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [monitorPosts, setMonitorPosts] = useState<MonitorPost[]>([]);
   const [monitorSummary, setMonitorSummary] = useState<MonitorSummary | null>(null);
@@ -124,7 +70,6 @@ export default function AutopilotDashboard() {
 
     const campaignData = (await campaignRes.json()) as {
       ok?: boolean;
-      campaigns?: Campaign[];
       summary?: Summary;
       message?: string;
     };
@@ -144,7 +89,6 @@ export default function AutopilotDashboard() {
       throw new Error(campaignData.message ?? "Could not load autopilot.");
     }
 
-    setCampaigns(campaignData.campaigns ?? []);
     setSummary(campaignData.summary ?? null);
     setMonitorPosts(monitorData.posts ?? []);
     setMonitorSummary(monitorData.summary ?? null);
@@ -218,7 +162,7 @@ export default function AutopilotDashboard() {
       }
 
       setSourceUrl("");
-      setSuccessMessage("Queued manually — autopilot will clip and schedule posts.");
+      setSuccessMessage("Added — it'll be clipped, captioned, and scheduled to TikTok.");
       await loadDashboard();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Submit failed.");
@@ -291,19 +235,16 @@ export default function AutopilotDashboard() {
     );
   }
 
-  return (
-    <SiteShell mode="autopilot" wide>
-      <section className="opus-intro">
-        <h1>Shark Tank entrepreneurs on autopilot.</h1>
-        <p>
-          Discovers interview-style business videos (≤{settings?.max_source_duration_min ?? 20}{" "}
-          min), clips with {providerLabel(settings?.clip_provider ?? "wayinvideo")}, and posts
-          to TikTok about every{" "}
-          {formatPostInterval(settings?.min_hours_between_posts ?? 1 / 3)} (up to 3/hour) — up to{" "}
-          {settings?.sources_per_day ?? 4} new sources per day.
-        </p>
-      </section>
+  const running = settings?.enabled ?? false;
+  const nicheLabel = humanizeNiche(settings?.niche);
+  const engine = providerLabel(settings?.clip_provider);
+  const postedToday = summary?.postedToday ?? 0;
+  const queued = summary?.queuedPosts ?? 0;
+  const inPipeline = summary?.pendingCampaigns ?? 0;
+  const nextPost = summary?.nextPostAt ? formatRelative(summary.nextPostAt) : null;
 
+  return (
+    <SiteShell subtitle={nicheLabel} wide>
       {errorMessage ? (
         <div className="opus-alert" role="alert">
           {errorMessage}
@@ -311,60 +252,89 @@ export default function AutopilotDashboard() {
       ) : null}
       {successMessage ? <p className="opus-hint">{successMessage}</p> : null}
 
-      <div className="opus-stats">
-        <div className="opus-stat">
-          <span className="opus-stat-label">In pipeline</span>
-          <strong>{summary?.pendingCampaigns ?? 0}</strong>
-        </div>
-        <div className="opus-stat">
-          <span className="opus-stat-label">Queued posts</span>
-          <strong>{summary?.queuedPosts ?? 0}</strong>
-        </div>
-        <div className="opus-stat">
-          <span className="opus-stat-label">Posted today</span>
-          <strong>{summary?.postedToday ?? 0}</strong>
-        </div>
-        <div className="opus-stat">
-          <span className="opus-stat-label">Next post</span>
-          <strong className="opus-stat-compact">{formatWhen(summary?.nextPostAt ?? null)}</strong>
-        </div>
-      </div>
-
-      <div className="opus-panel opus-resume">
-        <div className="opus-row">
+      <section className={`opus-panel opus-status ${running ? "on" : "off"}`}>
+        <div className="opus-status-main">
+          <span className={`opus-status-dot ${running ? "on" : "off"}`} aria-hidden="true" />
           <div>
-            <h3>Autopilot {settings?.enabled ? "ON" : "PAUSED"}</h3>
-            <p className="opus-hint">
-              Provider: {providerLabel(settings?.clip_provider ?? "wayinvideo")} · Up to{" "}
-              {settings?.max_clips_per_source ?? 4} clips per source · Failed items auto-clear
-              after 7 days
+            <h1 className="opus-status-headline">
+              {running ? "Autopilot is running." : "Autopilot is paused."}
+            </h1>
+            <p className="opus-status-sub">
+              {running ? (
+                <>
+                  {nextPost ? <>Next post {nextPost} · </> : null}
+                  {postedToday} posted today · {queued} queued
+                </>
+              ) : (
+                <>Nothing is being posted. Turn it on to grow {nicheLabel} on TikTok.</>
+              )}
             </p>
           </div>
-          <button type="button" className="opus-secondary" onClick={toggleAutopilot}>
-            {settings?.enabled ? "Pause" : "Resume"}
-          </button>
         </div>
-      </div>
+        <button
+          type="button"
+          className={running ? "opus-secondary" : "opus-cta"}
+          onClick={toggleAutopilot}
+          disabled={!settings}
+        >
+          {running ? "Pause" : "Turn on"}
+        </button>
+      </section>
 
-      <details className="opus-panel">
-        <summary className="opus-advanced-toggle">Manual override (optional)</summary>
-        <form className="opus-input-row" onSubmit={handleSubmit} style={{ marginTop: "1rem" }}>
+      <section className="opus-pipeline" aria-label="Pipeline">
+        <div className="opus-stage">
+          <span className="opus-stage-icon">🔎</span>
+          <strong>Discover</strong>
+          <span className="opus-hint">YouTube · {settings?.sources_per_day ?? 4}/day</span>
+        </div>
+        <span className="opus-stage-arrow" aria-hidden="true">→</span>
+        <div className="opus-stage">
+          <span className="opus-stage-icon">✂️</span>
+          <strong>Clip</strong>
+          <span className="opus-hint">{engine} · {settings?.max_clips_per_source ?? 4}/video</span>
+        </div>
+        <span className="opus-stage-arrow" aria-hidden="true">→</span>
+        <div className="opus-stage">
+          <span className="opus-stage-icon">💬</span>
+          <strong>Caption</strong>
+          <span className="opus-hint">Auto</span>
+        </div>
+        <span className="opus-stage-arrow" aria-hidden="true">→</span>
+        <div className="opus-stage">
+          <span className="opus-stage-icon">📲</span>
+          <strong>Post</strong>
+          <span className="opus-hint">TikTok · {postedToday} today</span>
+        </div>
+      </section>
+
+      <section className="opus-panel opus-addnow">
+        <div>
+          <h3>Add a video now</h3>
+          <p className="opus-hint">
+            Paste a YouTube link to jump the queue{inPipeline > 0 ? ` (${inPipeline} in pipeline)` : ""}.
+          </p>
+        </div>
+        <form className="opus-input-row" onSubmit={handleSubmit}>
           <input
             className="opus-input opus-input-lg"
             value={sourceUrl}
             onChange={(event) => setSourceUrl(event.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
-            disabled={submitting || settings?.enabled === false}
+            disabled={submitting}
           />
-          <button
-            type="submit"
-            className="opus-cta"
-            disabled={!sourceUrl.trim() || submitting || settings?.enabled === false}
-          >
-            {submitting ? "Queuing…" : "Queue URL"}
+          <button type="submit" className="opus-cta" disabled={!sourceUrl.trim() || submitting}>
+            {submitting ? "Adding…" : "Clip it"}
           </button>
         </form>
-      </details>
+        <div className="opus-addnow-links">
+          <Link href="/workbench" className="opus-textlink">
+            Manual upload &amp; options →
+          </Link>
+          <Link href="/supoclip" className="opus-textlink">
+            Open SupoClip editor →
+          </Link>
+        </div>
+      </section>
 
       <MonitorSection
         posts={monitorPosts}
@@ -373,28 +343,6 @@ export default function AutopilotDashboard() {
         onClearFailed={handleClearFailed}
         clearingFailed={clearingFailed}
       />
-
-      {campaigns.length > 0 ? (
-        <section className="opus-panel">
-          <h3>Recent sources</h3>
-          <ul className="opus-campaign-list">
-            {campaigns.slice(0, 8).map((campaign) => (
-              <li key={campaign.id} className="opus-campaign-item">
-                <div>
-                  <strong>
-                    {statusLabel(campaign.status)} · {providerLabel(campaign.clip_provider)}
-                  </strong>
-                  <p className="opus-hint opus-campaign-url">{campaign.source_url}</p>
-                  {campaign.error_message ? (
-                    <p className="opus-error">{campaign.error_message}</p>
-                  ) : null}
-                </div>
-                <span className="opus-hint">{formatWhen(campaign.created_at)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
     </SiteShell>
   );
 }
