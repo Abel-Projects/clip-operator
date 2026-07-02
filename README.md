@@ -1,25 +1,27 @@
 # Clip Operator
 
-**Autopilot** (default): discovers entrepreneur / Shark Tank–adjacent YouTube interviews → **WayinVideo** clips → best moments scheduled to **TikTok** (1 post/hour by default).
+A single-purpose **TikTok growth machine** for one niche. It runs one loop on autopilot:
 
-**Manual mode** (`/workbench`): compare **WayinVideo** and **SupoClip** side by side.
+**Discover YouTube interviews → clip with SupoClip → auto-caption → post to TikTok (~1/hour).**
 
-Hosted on **Vercel**: `https://clip-operator.vercel.app` (password-protected via `APP_PASSWORD`).
+One dashboard shows whether the machine is running, what's in the pipeline, and every recent post. Manual upload is folded in as an "Add a video now" quick action.
 
 ## Autopilot flow
 
 1. Cron discovers up to **4** new YouTube sources per day (≤20 min, interview-style; blocks full episodes/compilations)
-2. **WayinVideo** clips each source (up to **4** clips per video by score)
-3. Posts are **queued to TikTok** via WayinVideo (~**1/hour** spacing)
-4. Vercel cron (or [cron-job.org](scripts/cron-job.org.txt)) hits `/api/cron/autopilot` every few minutes
+2. **SupoClip** (default, self-hosted on your home server) clips each source (up to **4** clips per video by score)
+3. Posts are auto-captioned and **queued to TikTok**, spaced **~1/hour** (24/day)
+4. A cron trigger (systemd timer, local `cron`, or [cron-job.org](scripts/cron-job.org.txt)) hits `/api/cron/autopilot` every few minutes
+5. The [home-server TikTok publisher](home-server/tiktok-publisher) claims queued posts and uploads them (Playwright + cookies, no paid API)
 
-Switch clipper + TikTok posting:
+### Clip engines (providers)
 
-- **WayinVideo** (default) — cloud API clips + TikTok via WayinVideo
-- **SupoClip** — self-hosted clips on your home server + **free TikTok** via [home-server/tiktok-publisher](home-server/tiktok-publisher) (Playwright + cookies, no paid API)
+- **SupoClip** (default) — free, self-hosted clips + **free TikTok** via the home-server publisher
+- **WayinVideo** (optional fallback) — cloud API clips + TikTok via WayinVideo (paid)
 
 ```sql
-update autopilot_settings set clip_provider = 'supoclip' where id = 1;
+-- fall back to the paid cloud engine if needed
+update autopilot_settings set clip_provider = 'wayinvideo' where id = 1;
 ```
 
 
@@ -32,21 +34,23 @@ Run migrations in order in **SQL Editor**:
 1. `supabase/migrations/20250628000000_autopilot.sql`
 2. `supabase/migrations/20250629000000_post_metrics.sql`
 3. `supabase/migrations/20250630000000_wayinvideo_autopilot.sql`
+4. `supabase/migrations/20250702000000_supoclip_default.sql`
+5. `supabase/migrations/20250702010000_home_server_status.sql`
 
-### 2. Environment variables (Vercel + `.env.local`)
+### 2. Environment variables (`.env.local` + host)
 
 | Variable | Required |
 |----------|----------|
-| `WAYINVIDEO_API_KEY` | Yes (autopilot clipping + TikTok post) |
 | `YOUTUBE_API_KEY` | Yes (autopilot discovery) |
 | `SUPABASE_URL` | Yes |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes |
-| `CRON_SECRET` | Yes on Vercel |
-| `APP_PASSWORD` | Recommended |
-| `SUPOCLIP_*` | SupoClip provider + home-server publisher |
+| `CRON_SECRET` | Yes (protects the cron trigger) |
+| `SUPOCLIP_*` | Yes (default clip engine + home-server publisher) |
+| `APP_PASSWORD` | Recommended (site + API password) |
 | `PUBLISH_AGENT_SECRET` | Optional; home-server TikTok agent auth (defaults to `CRON_SECRET`) |
+| `WAYINVIDEO_API_KEY` | Optional (only if you switch to the WayinVideo fallback) |
 
-TikTok must be connected in **WayinVideo** (or set `WAYINVIDEO_TIKTOK_ACCOUNT_ID`).
+For the default SupoClip pipeline, TikTok is handled by the [home-server publisher](home-server/tiktok-publisher). If you switch to WayinVideo, connect TikTok in WayinVideo (or set `WAYINVIDEO_TIKTOK_ACCOUNT_ID`).
 
 ### 3. Local dev
 
@@ -64,7 +68,19 @@ curl -X POST http://localhost:3000/api/cron/autopilot -H "Authorization: Bearer 
 
 ### 4. Deploy
 
-Set env vars on Vercel and deploy. Use [cron-job.org](scripts/cron-job.org.txt) if Hobby plan limits Vercel cron.
+**Home server (recommended, free TikTok path):** one Docker stack runs the app plus an
+internal cron loop. See [`deploy/README.md`](deploy/README.md).
+
+```bash
+cd deploy
+docker compose --env-file ../.env.local up -d --build
+```
+
+SupoClip and the [TikTok publisher](home-server/tiktok-publisher) run alongside it on the
+same box. A systemd timer is provided as an alternative to the cron container.
+
+**Vercel (alternative):** set env vars and deploy. Use [cron-job.org](scripts/cron-job.org.txt)
+to hit `/api/cron/autopilot` if your plan limits Vercel cron.
 
 ## Default niche
 

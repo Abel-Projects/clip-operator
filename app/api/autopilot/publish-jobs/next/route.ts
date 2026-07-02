@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordHeartbeat } from "@/lib/autopilot/health";
 import {
   claimNextSupoclipPublishJob,
   isPublishAgentAuthorized
@@ -20,6 +21,9 @@ export async function POST(req: Request) {
   }
 
   try {
+    // The publisher agent polls this endpoint on a schedule; each authorized
+    // poll doubles as a liveness heartbeat for the dashboard.
+    await recordHeartbeat("publisher", "poll").catch(() => undefined);
     const job = await claimNextSupoclipPublishJob();
     return NextResponse.json({ ok: true, job });
   } catch (error) {

@@ -2,7 +2,9 @@ import { buildAutopilotCaption, generateAutopilotCaption } from "@/lib/autopilot
 import { cleanupStaleFailedRecords } from "@/lib/autopilot/cleanup";
 import {
   countCampaignsCreatedToday,
-  discoverSourceVideo
+  discoverCandidates,
+  discoverSourceVideo,
+  recordSuggestions
 } from "@/lib/autopilot/discovery";
 import { recoverStalePostingJobs } from "@/lib/autopilot/publish-agent";
 import { getClipProvider, type ProviderClip } from "@/lib/autopilot/providers";
@@ -367,6 +369,18 @@ async function maybeDiscoverAndQueue(
     return;
   }
 
+  // Always refresh the suggestion queue so the user has things to vote on.
+  const candidates = await discoverCandidates(settings, 8);
+  const recorded = await recordSuggestions(candidates);
+  if (recorded > 0) {
+    actions.push(`Discovery: added ${recorded} new suggestion(s) to the queue`);
+  }
+
+  // In review mode, stop here — the user upvotes to queue.
+  if (settings.auto_approve_sources === false) {
+    return;
+  }
+
   const createdToday = await countCampaignsCreatedToday();
   if (createdToday >= settings.sources_per_day) {
     return;
@@ -374,7 +388,9 @@ async function maybeDiscoverAndQueue(
 
   const discovered = await discoverSourceVideo(settings);
   if (!discovered) {
-    actions.push("Discovery: no new videos matched filters");
+    if (recorded === 0) {
+      actions.push("Discovery: no new videos matched filters");
+    }
     return;
   }
 

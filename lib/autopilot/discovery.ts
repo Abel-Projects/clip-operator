@@ -165,6 +165,100 @@ async function getKnownSourceUrls(): Promise<Set<string>> {
   return new Set((data ?? []).map((row) => row.source_url));
 }
 
+/** URLs the user downvoted (or already suggested) so we don't re-propose them. */
+async function getSuggestedOrRejectedUrls(): Promise<Set<string>> {
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from("content_suggestions")
+    .select("url, status");
+  return new Set((data ?? []).map((row) => row.url));
+}
+
+function thumbnailFor(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+}
+
+/** Discover multiple candidate videos that pass the niche filters. */
+export async function discoverCandidates(
+  settings: AutopilotSettingsRow,
+  limit = 8
+): Promise<DiscoveredVideo[]> {
+  const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+  if (!apiKey) {
+    return [];
+  }
+
+  const maxDurationSec = Math.max(60, settings.max_source_duration_min * 60);
+  const known = await getKnownSourceUrls();
+  const candidateIds: string[] = [];
+
+  for (const channelId of parseChannelList(settings)) {
+    candidateIds.push(...(await latestFromChannel(apiKey, channelId, 5)));
+  }
+  for (const keyword of parseKeywordList(settings)) {
+    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 5)));
+  }
+
+  const uniqueIds = [...new Set(candidateIds)];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const details = await fetchVideoDetails(apiKey, uniqueIds);
+  const results: DiscoveredVideo[] = [];
+
+  for (const videoId of uniqueIds) {
+    const url = toVideoUrl(videoId);
+    if (known.has(url)) continue;
+
+    const meta = details.get(videoId);
+    if (!meta) continue;
+    if (meta.durationSec <= 0 || meta.durationSec > maxDurationSec) continue;
+    if (!isUsableTitle(meta.title)) continue;
+
+    results.push({
+      videoId,
+      url,
+      title: meta.title,
+      channelTitle: meta.channelTitle,
+      durationSec: meta.durationSec
+    });
+
+    if (results.length >= limit) break;
+  }
+
+  return results;
+}
+
+/** Save discovered candidates as pending suggestions (skips already seen/rejected). */
+export async function recordSuggestions(
+  videos: DiscoveredVideo[]
+): Promise<number> {
+  if (videos.length === 0) return 0;
+
+  const seen = await getSuggestedOrRejectedUrls();
+  const rows = videos
+    .filter((video) => !seen.has(video.url))
+    .map((video) => ({
+      video_id: video.videoId,
+      url: video.url,
+      title: video.title,
+      channel_title: video.channelTitle,
+      duration_sec: video.durationSec,
+      thumbnail_url: thumbnailFor(video.videoId),
+      status: "pending" as const
+    }));
+
+  if (rows.length === 0) return 0;
+
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
+    .from("content_suggestions")
+    .upsert(rows, { onConflict: "url", ignoreDuplicates: true });
+
+  return error ? 0 : rows.length;
+}
+
 export async function countCampaignsCreatedToday(): Promise<number> {
   const supabase = getSupabaseAdmin();
   const start = new Date();
@@ -181,59 +275,13 @@ export async function countCampaignsCreatedToday(): Promise<number> {
 export async function discoverSourceVideo(
   settings: AutopilotSettingsRow
 ): Promise<DiscoveredVideo | null> {
-  const apiKey = process.env.YOUTUBE_API_KEY?.trim();
-  if (!apiKey) {
-    return null;
-  }
+  const supabase = getSupabaseAdmin();
+  const { data: rejected } = await supabase
+    .from("content_suggestions")
+    .select("url")
+    .eq("status", "rejected");
+  const rejectedUrls = new Set((rejected ?? []).map((row) => row.url));
 
-  const maxDurationSec = Math.max(60, settings.max_source_duration_min * 60);
-  const known = await getKnownSourceUrls();
-  const candidateIds: string[] = [];
-
-  for (const channelId of parseChannelList(settings)) {
-    const ids = await latestFromChannel(apiKey, channelId, 5);
-    candidateIds.push(...ids);
-  }
-
-  for (const keyword of parseKeywordList(settings)) {
-    const ids = await searchByKeyword(apiKey, keyword, 5);
-    candidateIds.push(...ids);
-  }
-
-  const uniqueIds = [...new Set(candidateIds)];
-  if (uniqueIds.length === 0) {
-    return null;
-  }
-
-  const details = await fetchVideoDetails(apiKey, uniqueIds);
-
-  for (const videoId of uniqueIds) {
-    const url = toVideoUrl(videoId);
-    if (known.has(url)) {
-      continue;
-    }
-
-    const meta = details.get(videoId);
-    if (!meta) {
-      continue;
-    }
-
-    if (meta.durationSec <= 0 || meta.durationSec > maxDurationSec) {
-      continue;
-    }
-
-    if (!isUsableTitle(meta.title)) {
-      continue;
-    }
-
-    return {
-      videoId,
-      url,
-      title: meta.title,
-      channelTitle: meta.channelTitle,
-      durationSec: meta.durationSec
-    };
-  }
-
-  return null;
+  const candidates = await discoverCandidates(settings, 8);
+  return candidates.find((video) => !rejectedUrls.has(video.url)) ?? null;
 }

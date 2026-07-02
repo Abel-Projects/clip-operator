@@ -546,7 +546,7 @@ export default function ClipWorkbench() {
   }
 
   return (
-    <SiteShell mode="manual">
+    <SiteShell subtitle="Manual upload" back>
       <section className="opus-intro">
         <h1>Compare clipping APIs side by side.</h1>
         <p>

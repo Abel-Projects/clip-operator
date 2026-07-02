@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import MonitorSection, {
   type MonitorPost,
@@ -13,6 +14,14 @@ import {
   getStoredSitePassword,
   storeSitePassword
 } from "@/lib/client-auth";
+import { formatRelative, providerLabel, youtubeThumbnail } from "@/lib/format";
+
+type Summary = {
+  pendingCampaigns: number;
+  queuedPosts: number;
+  postedToday: number;
+  nextPostAt: string | null;
+};
 
 type CampaignStatus =
   | "pending"
@@ -26,29 +35,10 @@ type Campaign = {
   id: string;
   source_url: string;
   clip_provider: string;
-  provider_project_id: string | null;
   status: CampaignStatus;
   error_message: string | null;
   created_at: string;
 };
-
-type Summary = {
-  pendingCampaigns: number;
-  queuedPosts: number;
-  postedToday: number;
-  nextPostAt: string | null;
-};
-
-function formatPostInterval(hours: number): string {
-  if (hours < 1) {
-    const minutes = Math.round(hours * 60);
-    return `${minutes}m`;
-  }
-  if (Number.isInteger(hours)) {
-    return `${hours}h`;
-  }
-  return `${Math.round(hours * 60)}m`;
-}
 
 type Settings = {
   niche: string;
@@ -57,34 +47,40 @@ type Settings = {
   posts_per_day: number;
   min_hours_between_posts: number;
   sources_per_day: number;
-  max_source_duration_min: number;
   enabled: boolean;
 };
 
-function formatWhen(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString();
-}
+type Health = {
+  clipProvider: string;
+  supoclipReachable: boolean;
+  publisherLastSeenAt: string | null;
+  publisherOnline: boolean;
+};
 
-function statusLabel(status: CampaignStatus) {
+type Suggestion = {
+  id: string;
+  url: string;
+  title: string | null;
+  channel_title: string | null;
+  duration_sec: number | null;
+  thumbnail_url: string | null;
+};
+
+const PROCESSING_STATUSES: CampaignStatus[] = ["pending", "clipping", "scheduling", "active"];
+
+function processingLabel(status: CampaignStatus): string {
   switch (status) {
     case "pending":
-      return "Queued";
+      return "Queued for clipping";
     case "clipping":
-      return "Clipping";
+      return "Clipping the best moments…";
     case "scheduling":
-      return "Scheduling";
+      return "Scheduling posts…";
     case "active":
-      return "Posting";
-    case "done":
-      return "Done";
-    case "failed":
-      return "Failed";
+      return "Posting clips to TikTok…";
+    default:
+      return status;
   }
-}
-
-function providerLabel(provider: string) {
-  return provider === "supoclip" ? "SupoClip" : "WayinVideo";
 }
 
 export default function AutopilotDashboard() {
@@ -93,11 +89,14 @@ export default function AutopilotDashboard() {
   const [passwordError, setPasswordError] = useState("");
 
   const [sourceUrl, setSourceUrl] = useState("");
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [monitorPosts, setMonitorPosts] = useState<MonitorPost[]>([]);
   const [monitorSummary, setMonitorSummary] = useState<MonitorSummary | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [votingId, setVotingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [clearingFailed, setClearingFailed] = useState(false);
@@ -105,10 +104,12 @@ export default function AutopilotDashboard() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const loadDashboard = useCallback(async () => {
-    const [campaignRes, settingsRes, monitorRes] = await Promise.all([
+    const [campaignRes, settingsRes, monitorRes, healthRes, suggestRes] = await Promise.all([
       authFetch("/api/autopilot/campaigns"),
       authFetch("/api/autopilot/settings"),
-      authFetch("/api/autopilot/monitor")
+      authFetch("/api/autopilot/monitor"),
+      authFetch("/api/autopilot/health"),
+      authFetch("/api/autopilot/suggestions")
     ]);
 
     if (
@@ -128,16 +129,14 @@ export default function AutopilotDashboard() {
       summary?: Summary;
       message?: string;
     };
-
-    const settingsData = (await settingsRes.json()) as {
-      ok?: boolean;
-      settings?: Settings;
-    };
-
+    const settingsData = (await settingsRes.json()) as { settings?: Settings };
     const monitorData = (await monitorRes.json()) as {
-      ok?: boolean;
       posts?: MonitorPost[];
       summary?: MonitorSummary;
+    };
+    const healthData = (await healthRes.json().catch(() => ({}))) as { health?: Health };
+    const suggestData = (await suggestRes.json().catch(() => ({}))) as {
+      suggestions?: Suggestion[];
     };
 
     if (!campaignData.ok) {
@@ -148,6 +147,8 @@ export default function AutopilotDashboard() {
     setSummary(campaignData.summary ?? null);
     setMonitorPosts(monitorData.posts ?? []);
     setMonitorSummary(monitorData.summary ?? null);
+    setHealth(healthData.health ?? null);
+    setSuggestions(suggestData.suggestions ?? []);
 
     if (settingsData.settings) {
       setSettings(settingsData.settings);
@@ -171,18 +172,15 @@ export default function AutopilotDashboard() {
 
   useEffect(() => {
     if (!siteUnlocked) return;
-
     const interval = setInterval(() => {
       void loadDashboard().catch(() => undefined);
     }, 20_000);
-
     return () => clearInterval(interval);
   }, [siteUnlocked, loadDashboard]);
 
   async function handleUnlockSite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPasswordError("");
-
     const password = sitePassword.trim();
     if (!password) return;
 
@@ -218,7 +216,7 @@ export default function AutopilotDashboard() {
       }
 
       setSourceUrl("");
-      setSuccessMessage("Queued manually — autopilot will clip and schedule posts.");
+      setSuccessMessage("Added — it'll be clipped, captioned, and scheduled to TikTok.");
       await loadDashboard();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Submit failed.");
@@ -229,16 +227,34 @@ export default function AutopilotDashboard() {
 
   async function toggleAutopilot() {
     if (!settings) return;
-
     const response = await authFetch("/api/autopilot/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled: !settings.enabled })
     });
-
     const data = (await response.json()) as { settings?: Settings };
-    if (data.settings) {
-      setSettings(data.settings);
+    if (data.settings) setSettings(data.settings);
+  }
+
+  async function voteSuggestion(id: string, vote: "up" | "down") {
+    setVotingId(id);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const response = await authFetch("/api/autopilot/suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, vote })
+      });
+      const data = (await response.json()) as { ok?: boolean; message?: string };
+      if (!data.ok) throw new Error(data.message ?? "Vote failed.");
+      setSuggestions((prev) => prev.filter((s) => s.id !== id));
+      if (vote === "up") setSuccessMessage(data.message ?? "Approved.");
+      await loadDashboard();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Vote failed.");
+    } finally {
+      setVotingId(null);
     }
   }
 
@@ -246,29 +262,22 @@ export default function AutopilotDashboard() {
     if (!window.confirm("Delete all failed posts and failed campaigns from the monitor?")) {
       return;
     }
-
     setClearingFailed(true);
     setErrorMessage("");
     setSuccessMessage("");
-
     try {
       const response = await authFetch("/api/autopilot/cleanup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ all: true })
       });
-
       const data = (await response.json()) as {
         ok?: boolean;
         postsDeleted?: number;
         campaignsDeleted?: number;
         message?: string;
       };
-
-      if (!data.ok) {
-        throw new Error(data.message ?? "Could not clear failed items.");
-      }
-
+      if (!data.ok) throw new Error(data.message ?? "Could not clear failed items.");
       setSuccessMessage(
         `Cleared ${data.postsDeleted ?? 0} failed post(s) and ${data.campaignsDeleted ?? 0} failed campaign(s).`
       );
@@ -291,19 +300,21 @@ export default function AutopilotDashboard() {
     );
   }
 
-  return (
-    <SiteShell mode="autopilot" wide>
-      <section className="opus-intro">
-        <h1>Shark Tank entrepreneurs on autopilot.</h1>
-        <p>
-          Discovers interview-style business videos (≤{settings?.max_source_duration_min ?? 20}{" "}
-          min), clips with {providerLabel(settings?.clip_provider ?? "wayinvideo")}, and posts
-          to TikTok about every{" "}
-          {formatPostInterval(settings?.min_hours_between_posts ?? 1 / 3)} (up to 3/hour) — up to{" "}
-          {settings?.sources_per_day ?? 4} new sources per day.
-        </p>
-      </section>
+  const running = settings?.enabled ?? false;
+  const engine = providerLabel(settings?.clip_provider);
+  const postedToday = summary?.postedToday ?? 0;
+  const queued = summary?.queuedPosts ?? 0;
+  const nextPost = summary?.nextPostAt ? formatRelative(summary.nextPostAt) : null;
+  const isSupoclip = (settings?.clip_provider ?? "supoclip") === "supoclip";
+  const clipHealthy = !isSupoclip || (health?.supoclipReachable ?? false);
+  const postHealthy = !isSupoclip || (health?.publisherOnline ?? false);
+  const homeServerDown = running && isSupoclip && health != null && (!clipHealthy || !postHealthy);
 
+  const processing = campaigns.find((c) => PROCESSING_STATUSES.includes(c.status)) ?? null;
+  const processingThumb = processing ? youtubeThumbnail(processing.source_url) : null;
+
+  return (
+    <SiteShell wide>
       {errorMessage ? (
         <div className="opus-alert" role="alert">
           {errorMessage}
@@ -311,60 +322,178 @@ export default function AutopilotDashboard() {
       ) : null}
       {successMessage ? <p className="opus-hint">{successMessage}</p> : null}
 
-      <div className="opus-stats">
-        <div className="opus-stat">
-          <span className="opus-stat-label">In pipeline</span>
-          <strong>{summary?.pendingCampaigns ?? 0}</strong>
+      {homeServerDown ? (
+        <div className="opus-alert" role="alert">
+          Home server offline —{" "}
+          {!clipHealthy ? "SupoClip isn't reachable" : null}
+          {!clipHealthy && !postHealthy ? " and " : null}
+          {!postHealthy ? (
+            <>
+              the TikTok publisher hasn&apos;t checked in
+              {health?.publisherLastSeenAt
+                ? ` (last seen ${formatRelative(health.publisherLastSeenAt)})`
+                : ""}
+            </>
+          ) : null}
+          . Posting is paused until it&apos;s back.
         </div>
-        <div className="opus-stat">
-          <span className="opus-stat-label">Queued posts</span>
-          <strong>{summary?.queuedPosts ?? 0}</strong>
-        </div>
-        <div className="opus-stat">
-          <span className="opus-stat-label">Posted today</span>
-          <strong>{summary?.postedToday ?? 0}</strong>
-        </div>
-        <div className="opus-stat">
-          <span className="opus-stat-label">Next post</span>
-          <strong className="opus-stat-compact">{formatWhen(summary?.nextPostAt ?? null)}</strong>
-        </div>
-      </div>
+      ) : null}
 
-      <div className="opus-panel opus-resume">
-        <div className="opus-row">
-          <div>
-            <h3>Autopilot {settings?.enabled ? "ON" : "PAUSED"}</h3>
-            <p className="opus-hint">
-              Provider: {providerLabel(settings?.clip_provider ?? "wayinvideo")} · Up to{" "}
-              {settings?.max_clips_per_source ?? 4} clips per source · Failed items auto-clear
-              after 7 days
-            </p>
-          </div>
-          <button type="button" className="opus-secondary" onClick={toggleAutopilot}>
-            {settings?.enabled ? "Pause" : "Resume"}
+      {/* Hero: big posted-today counter + on/off */}
+      <section className={`opus-hero-status ${running ? "on" : "off"}`}>
+        <div className="opus-counter">
+          <span className="opus-counter-num">{postedToday}</span>
+          <span className="opus-counter-label">TikToks posted today</span>
+          <span className="opus-counter-sub">
+            {queued} queued{nextPost ? ` · next ${nextPost}` : ""}
+            {isSupoclip ? (
+              <>
+                {" · "}
+                <span className={`opus-health-dot ${postHealthy ? "on" : "off"}`} />{" "}
+                publisher {postHealthy ? "online" : "offline"}
+              </>
+            ) : null}
+          </span>
+        </div>
+        <div className="opus-hero-toggle">
+          <span className={`opus-status-dot ${running ? "on" : "off"}`} aria-hidden="true" />
+          <span className="opus-hero-state">{running ? "Running" : "Paused"}</span>
+          <button
+            type="button"
+            className={running ? "opus-secondary" : "opus-cta"}
+            onClick={toggleAutopilot}
+            disabled={!settings}
+          >
+            {running ? "Pause" : "Turn on"}
           </button>
         </div>
-      </div>
+      </section>
 
-      <details className="opus-panel">
-        <summary className="opus-advanced-toggle">Manual override (optional)</summary>
-        <form className="opus-input-row" onSubmit={handleSubmit} style={{ marginTop: "1rem" }}>
+      {/* Currently processing */}
+      {processing ? (
+        <section className="opus-panel opus-processing-card">
+          <div className="opus-processing-thumb">
+            {processingThumb ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={processingThumb} alt="" />
+            ) : (
+              <div className="opus-processing-thumb-fallback">▶</div>
+            )}
+            <span className="opus-processing-badge">Processing</span>
+          </div>
+          <div className="opus-processing-info">
+            <h3>{processingLabel(processing.status)}</h3>
+            <p className="opus-hint">
+              Clipping with {providerLabel(processing.clip_provider)} · up to{" "}
+              {settings?.max_clips_per_source ?? 4} clips
+            </p>
+            <a
+              href={processing.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="opus-textlink"
+            >
+              View source video ↗
+            </a>
+            {processing.error_message ? (
+              <p className="opus-error">{processing.error_message}</p>
+            ) : null}
+          </div>
+        </section>
+      ) : (
+        <section className="opus-panel opus-processing-empty">
+          <p className="opus-hint">
+            {running
+              ? "Nothing processing right now — autopilot will pull the next source shortly."
+              : "Autopilot is paused. Turn it on or add a video below."}
+          </p>
+        </section>
+      )}
+
+      {/* Add a video now */}
+      <section className="opus-panel opus-addnow">
+        <div>
+          <h3>Add a video now</h3>
+          <p className="opus-hint">Paste a YouTube link to jump the queue.</p>
+        </div>
+        <form className="opus-input-row" onSubmit={handleSubmit}>
           <input
             className="opus-input opus-input-lg"
             value={sourceUrl}
             onChange={(event) => setSourceUrl(event.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
-            disabled={submitting || settings?.enabled === false}
+            disabled={submitting}
           />
-          <button
-            type="submit"
-            className="opus-cta"
-            disabled={!sourceUrl.trim() || submitting || settings?.enabled === false}
-          >
-            {submitting ? "Queuing…" : "Queue URL"}
+          <button type="submit" className="opus-cta" disabled={!sourceUrl.trim() || submitting}>
+            {submitting ? "Adding…" : "Clip it"}
           </button>
         </form>
-      </details>
+        <div className="opus-addnow-links">
+          <Link href="/workbench" className="opus-textlink">
+            Manual upload &amp; options →
+          </Link>
+          <Link href="/supoclip" className="opus-textlink">
+            Open SupoClip editor →
+          </Link>
+        </div>
+      </section>
+
+      {/* Suggestion vote queue */}
+      {suggestions.length > 0 ? (
+        <section className="opus-panel">
+          <div className="opus-section-head">
+            <div>
+              <h2>Up next — you decide</h2>
+              <p className="opus-hint">
+                Videos autopilot found. Upvote to clip &amp; post, downvote to skip.
+              </p>
+            </div>
+          </div>
+          <div className="opus-suggest-grid">
+            {suggestions.map((s) => (
+              <article key={s.id} className="opus-suggest-card">
+                <a href={s.url} target="_blank" rel="noreferrer" className="opus-suggest-thumb">
+                  {s.thumbnail_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.thumbnail_url} alt="" />
+                  ) : (
+                    <div className="opus-processing-thumb-fallback">▶</div>
+                  )}
+                </a>
+                <div className="opus-suggest-body">
+                  <p className="opus-suggest-title">{s.title ?? s.url}</p>
+                  {s.channel_title ? (
+                    <p className="opus-hint">
+                      {s.channel_title}
+                      {s.duration_sec ? ` · ${Math.round(s.duration_sec / 60)}m` : ""}
+                    </p>
+                  ) : null}
+                  <div className="opus-vote-row">
+                    <button
+                      type="button"
+                      className="opus-vote up"
+                      onClick={() => voteSuggestion(s.id, "up")}
+                      disabled={votingId === s.id}
+                      aria-label="Upvote"
+                    >
+                      ▲ Clip it
+                    </button>
+                    <button
+                      type="button"
+                      className="opus-vote down"
+                      onClick={() => voteSuggestion(s.id, "down")}
+                      disabled={votingId === s.id}
+                      aria-label="Downvote"
+                    >
+                      ▼ Skip
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <MonitorSection
         posts={monitorPosts}
@@ -373,28 +502,6 @@ export default function AutopilotDashboard() {
         onClearFailed={handleClearFailed}
         clearingFailed={clearingFailed}
       />
-
-      {campaigns.length > 0 ? (
-        <section className="opus-panel">
-          <h3>Recent sources</h3>
-          <ul className="opus-campaign-list">
-            {campaigns.slice(0, 8).map((campaign) => (
-              <li key={campaign.id} className="opus-campaign-item">
-                <div>
-                  <strong>
-                    {statusLabel(campaign.status)} · {providerLabel(campaign.clip_provider)}
-                  </strong>
-                  <p className="opus-hint opus-campaign-url">{campaign.source_url}</p>
-                  {campaign.error_message ? (
-                    <p className="opus-error">{campaign.error_message}</p>
-                  ) : null}
-                </div>
-                <span className="opus-hint">{formatWhen(campaign.created_at)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
     </SiteShell>
   );
 }

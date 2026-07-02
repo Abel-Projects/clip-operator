@@ -76,7 +76,7 @@ export default function SupoClipEmbed({
   }
 
   return (
-    <SiteShell mode="supoclip" wide>
+    <SiteShell subtitle="SupoClip editor" back wide>
       <section className="opus-embed-panel">
         <p className="opus-hint">
           Full SupoClip editor on your home server. Clipping API is wired for autopilot;
