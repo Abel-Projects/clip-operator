@@ -1,0 +1,12 @@
+[Unit]
+Description=Clip Operator autopilot tick
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Fill these in (or use an EnvironmentFile=/etc/clip-operator.env)
+Environment=CLIP_OPERATOR_URL=http://localhost:3000
+# Environment=CRON_SECRET=your-cron-secret
+# EnvironmentFile=/etc/clip-operator.env
+ExecStart=/usr/bin/env bash /opt/clip-operator/deploy/trigger-autopilot.sh

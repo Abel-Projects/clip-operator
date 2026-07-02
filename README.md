@@ -68,7 +68,19 @@ curl -X POST http://localhost:3000/api/cron/autopilot -H "Authorization: Bearer 
 
 ### 4. Deploy
 
-Set env vars on Vercel and deploy. Use [cron-job.org](scripts/cron-job.org.txt) if Hobby plan limits Vercel cron.
+**Home server (recommended, free TikTok path):** one Docker stack runs the app plus an
+internal cron loop. See [`deploy/README.md`](deploy/README.md).
+
+```bash
+cd deploy
+docker compose --env-file ../.env.local up -d --build
+```
+
+SupoClip and the [TikTok publisher](home-server/tiktok-publisher) run alongside it on the
+same box. A systemd timer is provided as an alternative to the cron container.
+
+**Vercel (alternative):** set env vars and deploy. Use [cron-job.org](scripts/cron-job.org.txt)
+to hit `/api/cron/autopilot` if your plan limits Vercel cron.
 
 ## Default niche
 
