@@ -22,8 +22,25 @@ export type AutopilotSettingsRow = {
   enabled: boolean;
   sources_per_day: number;
   max_source_duration_min: number;
+  auto_approve_sources: boolean;
   discovery_keywords: string[] | unknown;
   discovery_channels: string[] | unknown;
+  updated_at: string;
+};
+
+export type SuggestionStatus = "pending" | "approved" | "rejected";
+
+export type ContentSuggestionRow = {
+  id: string;
+  video_id: string;
+  url: string;
+  title: string | null;
+  channel_title: string | null;
+  duration_sec: number | null;
+  thumbnail_url: string | null;
+  score: number;
+  status: SuggestionStatus;
+  created_at: string;
   updated_at: string;
 };
 
@@ -113,6 +130,20 @@ export type Database = {
           selected?: boolean;
         };
         Update: Partial<CampaignClipRow>;
+      };
+      content_suggestions: {
+        Row: ContentSuggestionRow;
+        Insert: {
+          video_id: string;
+          url: string;
+          title?: string | null;
+          channel_title?: string | null;
+          duration_sec?: number | null;
+          thumbnail_url?: string | null;
+          score?: number;
+          status?: SuggestionStatus;
+        };
+        Update: Partial<ContentSuggestionRow>;
       };
       system_heartbeats: {
         Row: SystemHeartbeatRow;

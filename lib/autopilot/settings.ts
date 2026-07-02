@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   enabled: true,
   sources_per_day: 4,
   max_source_duration_min: 20,
+  auto_approve_sources: true,
   discovery_keywords: [
     "mark cuban interview entrepreneur",
     "barbara corcoran interview advice",

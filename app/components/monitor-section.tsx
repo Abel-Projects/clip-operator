@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { formatDuration, formatMetric, formatRelative } from "@/lib/format";
+import {
+  cleanCaption,
+  formatDuration,
+  formatMetric,
+  formatRelative,
+  youtubeThumbnail
+} from "@/lib/format";
 
 export type PostStatus = "queued" | "posting" | "posted" | "failed";
 
@@ -129,35 +135,34 @@ export default function MonitorSection({
       {!loading && visiblePosts.length > 0 ? (
         <div className="opus-post-grid">
           {visiblePosts.map((post) => {
-            const title = post.captionTitle ?? post.clip?.title ?? post.providerClipId;
+            const caption =
+              cleanCaption(post.captionTitle) ||
+              cleanCaption(post.clip?.title) ||
+              post.providerClipId;
             const when =
               post.status === "posted"
                 ? `Posted ${formatRelative(post.postedAt)}`
                 : `Scheduled ${formatRelative(post.scheduledAt)}`;
+            const thumb = youtubeThumbnail(post.campaign?.sourceUrl);
+            const clipUrl = post.clip?.previewUrl ?? null;
 
             return (
               <article key={post.id} className={`opus-post-card ${statusClass(post.status)}`}>
-                <div className="opus-post-card-head">
-                  <span className={`opus-pill ${statusClass(post.status)}`}>
+                <div className="opus-post-thumb">
+                  {thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={thumb} alt="" />
+                  ) : (
+                    <div className="opus-processing-thumb-fallback">▶</div>
+                  )}
+                  <span className={`opus-pill ${statusClass(post.status)} opus-post-thumb-pill`}>
                     {statusLabel(post.status)}
                   </span>
-                  {post.clip?.previewUrl ? (
-                    <a
-                      href={post.clip.previewUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="opus-post-preview"
-                    >
-                      Preview ↗
-                    </a>
-                  ) : null}
                 </div>
 
-                <p className="opus-post-title">{title}</p>
-
-                {post.campaign?.sourceUrl ? (
-                  <p className="opus-hint opus-post-source">{post.campaign.sourceUrl}</p>
-                ) : null}
+                <p className="opus-post-title" title={caption}>
+                  {caption}
+                </p>
 
                 {post.errorMessage ? (
                   <p className="opus-error opus-post-error">{post.errorMessage}</p>
@@ -177,6 +182,24 @@ export default function MonitorSection({
                     <span>{formatMetric(post.likes)} likes</span>
                   </div>
                 ) : null}
+
+                <div className="opus-post-links">
+                  {clipUrl ? (
+                    <a href={clipUrl} target="_blank" rel="noreferrer" className="opus-textlink">
+                      Watch clip ↗
+                    </a>
+                  ) : null}
+                  {post.campaign?.sourceUrl ? (
+                    <a
+                      href={post.campaign.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="opus-textlink"
+                    >
+                      Source ↗
+                    </a>
+                  ) : null}
+                </div>
               </article>
             );
           })}

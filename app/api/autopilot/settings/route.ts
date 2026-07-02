@@ -76,6 +76,9 @@ export async function PATCH(req: Request) {
   }
   if (typeof body.timezone === "string") patch.timezone = body.timezone;
   if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
+  if (typeof body.auto_approve_sources === "boolean") {
+    patch.auto_approve_sources = body.auto_approve_sources;
+  }
   if (Array.isArray(body.discovery_keywords)) {
     patch.discovery_keywords = body.discovery_keywords.filter(
       (entry): entry is string => typeof entry === "string"
