@@ -76,6 +76,36 @@ export function formatMetric(value: number | null | undefined): string {
   return value == null ? "—" : value.toLocaleString();
 }
 
+/** Extract a YouTube video id from a watch/share URL. */
+export function youtubeId(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const patterns = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/(?:embed|shorts)\/([a-zA-Z0-9_-]{11})/
+  ];
+  for (const re of patterns) {
+    const m = url.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/** Thumbnail URL for a YouTube source, or null if it isn't a YouTube link. */
+export function youtubeThumbnail(url: string | null | undefined): string | null {
+  const id = youtubeId(url);
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null;
+}
+
+/** Strip transcript speaker labels for clean display. */
+export function cleanCaption(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(/\bspeaker\s*[a-z0-9]+\s*:/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Turn an hours gap into a friendly cadence, e.g. 1 -> "about 1/hour". */
 export function formatCadence(minHoursBetweenPosts: number | null | undefined): string {
   if (!minHoursBetweenPosts || minHoursBetweenPosts <= 0) return "as fast as possible";

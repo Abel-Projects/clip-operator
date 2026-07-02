@@ -1,12 +1,63 @@
 const DEFAULT_HASHTAGS = "#sharktank #entrepreneur #business #startup #fyp";
 const GEMINI_MODEL = "gemini-2.0-flash-lite";
 
+/** Filler-only lines we never want to use as a hook. */
+const FILLER = new Set([
+  "yeah",
+  "yep",
+  "no",
+  "okay",
+  "ok",
+  "right",
+  "sure",
+  "uh",
+  "um",
+  "so",
+  "well",
+  "i think so",
+  "it",
+  "you know"
+]);
+
+/**
+ * SupoClip "titles" are raw transcripts with speaker labels
+ * ("Speaker A:", "Speaker 1:", ">>"). Strip that noise so captions read cleanly.
+ */
+export function cleanTranscriptText(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(/\bspeaker\s*[a-z0-9]+\s*:/gi, " ")
+    .replace(/^\s*>>+/gm, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Pick the first substantive sentence (not filler), else the longest. */
+function pickHook(cleaned: string): string {
+  const sentences = cleaned
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const substantive = sentences.find(
+    (s) => s.length >= 25 && !FILLER.has(s.replace(/[.!?]+$/, "").toLowerCase())
+  );
+
+  const chosen =
+    substantive ??
+    [...sentences].sort((a, b) => b.length - a.length)[0] ??
+    cleaned;
+
+  return chosen.length > 120 ? `${chosen.slice(0, 117).trimEnd()}...` : chosen;
+}
+
 export function buildAutopilotCaption(input: {
   title?: string | null;
   description?: string | null;
 }): { title: string; description: string } {
-  const title = input.title?.trim() || "Clip";
-  const description = input.description?.trim() || title;
+  const cleanedTitle = cleanTranscriptText(input.title);
+  const title = cleanedTitle ? pickHook(cleanedTitle) : "Clip";
+  const description = cleanTranscriptText(input.description) || title;
 
   return { title, description };
 }
@@ -15,12 +66,8 @@ function fallbackTikTokCaption(transcript: string, niche?: string | null): {
   title: string;
   description: string;
 } {
-  const cleaned = transcript.replace(/\s+/g, " ").trim();
-  const firstSentence = cleaned.split(/(?<=[.!?])\s+/)[0]?.trim() || cleaned;
-  const hook =
-    firstSentence.length > 120
-      ? `${firstSentence.slice(0, 117).trimEnd()}...`
-      : firstSentence || "This clip hits different.";
+  const cleaned = cleanTranscriptText(transcript);
+  const hook = cleaned ? pickHook(cleaned) : "This clip hits different.";
 
   const nicheTag = niche?.trim().replace(/\s+/g, "").toLowerCase();
   const hashtags = nicheTag
@@ -62,7 +109,7 @@ export async function generateAutopilotCaption(input: {
   sourceTitle?: string | null;
   niche?: string | null;
 }): Promise<{ title: string; description: string }> {
-  const transcript = input.transcript.replace(/\s+/g, " ").trim();
+  const transcript = cleanTranscriptText(input.transcript);
   if (!transcript) {
     return buildAutopilotCaption({ title: "Clip", description: DEFAULT_HASHTAGS });
   }
