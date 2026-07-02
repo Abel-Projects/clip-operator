@@ -4,10 +4,10 @@ import type { AutopilotSettingsRow } from "@/lib/supabase/types";
 export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   id: 1,
   niche: "shark_tank_entrepreneurs",
-  clip_provider: "wayinvideo",
+  clip_provider: "supoclip",
   max_clips_per_source: 4,
-  posts_per_day: 72,
-  min_hours_between_posts: 1 / 3,
+  posts_per_day: 24,
+  min_hours_between_posts: 1,
   min_clip_score: 0,
   timezone: "America/New_York",
   enabled: true,

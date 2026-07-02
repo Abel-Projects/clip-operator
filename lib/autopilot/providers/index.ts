@@ -8,10 +8,10 @@ const providers: Record<ClipProviderName, ClipProviderAdapter> = {
 };
 
 export function getClipProvider(name: string | undefined | null): ClipProviderAdapter {
-  if (name === "supoclip") {
-    return providers.supoclip;
+  if (name === "wayinvideo") {
+    return providers.wayinvideo;
   }
-  return providers.wayinvideo;
+  return providers.supoclip;
 }
 
 export type { ClipProviderAdapter, ClipProviderName, ProviderClip } from "./types";
