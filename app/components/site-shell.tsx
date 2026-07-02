@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode } from "react";
+import ThemeToggle from "./theme-toggle";
 
 type SiteShellProps = {
   /** Small label under the brand, e.g. the niche or the page name. */
@@ -31,6 +32,7 @@ export default function SiteShell({ subtitle, back, wide, right, children }: Sit
               ← Dashboard
             </Link>
           ) : null}
+          <ThemeToggle />
         </div>
       </header>
       {children}
