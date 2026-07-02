@@ -52,6 +52,13 @@ export type CampaignClipRow = {
   selected: boolean;
 };
 
+export type SystemHeartbeatRow = {
+  name: string;
+  last_seen_at: string;
+  detail: string | null;
+  updated_at: string;
+};
+
 export type ScheduledPostRow = {
   id: string;
   campaign_id: string;
@@ -106,6 +113,16 @@ export type Database = {
           selected?: boolean;
         };
         Update: Partial<CampaignClipRow>;
+      };
+      system_heartbeats: {
+        Row: SystemHeartbeatRow;
+        Insert: {
+          name: string;
+          last_seen_at?: string;
+          detail?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<SystemHeartbeatRow>;
       };
       scheduled_posts: {
         Row: ScheduledPostRow;

@@ -34,6 +34,13 @@ type Settings = {
   enabled: boolean;
 };
 
+type Health = {
+  clipProvider: string;
+  supoclipReachable: boolean;
+  publisherLastSeenAt: string | null;
+  publisherOnline: boolean;
+};
+
 export default function AutopilotDashboard() {
   const [siteUnlocked, setSiteUnlocked] = useState(false);
   const [sitePassword, setSitePassword] = useState("");
@@ -44,6 +51,7 @@ export default function AutopilotDashboard() {
   const [monitorPosts, setMonitorPosts] = useState<MonitorPost[]>([]);
   const [monitorSummary, setMonitorSummary] = useState<MonitorSummary | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [clearingFailed, setClearingFailed] = useState(false);
@@ -51,10 +59,11 @@ export default function AutopilotDashboard() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const loadDashboard = useCallback(async () => {
-    const [campaignRes, settingsRes, monitorRes] = await Promise.all([
+    const [campaignRes, settingsRes, monitorRes, healthRes] = await Promise.all([
       authFetch("/api/autopilot/campaigns"),
       authFetch("/api/autopilot/settings"),
-      authFetch("/api/autopilot/monitor")
+      authFetch("/api/autopilot/monitor"),
+      authFetch("/api/autopilot/health")
     ]);
 
     if (
@@ -85,6 +94,11 @@ export default function AutopilotDashboard() {
       summary?: MonitorSummary;
     };
 
+    const healthData = (await healthRes.json().catch(() => ({}))) as {
+      ok?: boolean;
+      health?: Health;
+    };
+
     if (!campaignData.ok) {
       throw new Error(campaignData.message ?? "Could not load autopilot.");
     }
@@ -92,6 +106,7 @@ export default function AutopilotDashboard() {
     setSummary(campaignData.summary ?? null);
     setMonitorPosts(monitorData.posts ?? []);
     setMonitorSummary(monitorData.summary ?? null);
+    setHealth(healthData.health ?? null);
 
     if (settingsData.settings) {
       setSettings(settingsData.settings);
@@ -242,6 +257,10 @@ export default function AutopilotDashboard() {
   const queued = summary?.queuedPosts ?? 0;
   const inPipeline = summary?.pendingCampaigns ?? 0;
   const nextPost = summary?.nextPostAt ? formatRelative(summary.nextPostAt) : null;
+  const isSupoclip = (settings?.clip_provider ?? "supoclip") === "supoclip";
+  const clipHealthy = !isSupoclip || (health?.supoclipReachable ?? false);
+  const postHealthy = !isSupoclip || (health?.publisherOnline ?? false);
+  const homeServerDown = running && isSupoclip && health != null && (!clipHealthy || !postHealthy);
 
   return (
     <SiteShell subtitle={nicheLabel} wide>
@@ -281,6 +300,23 @@ export default function AutopilotDashboard() {
         </button>
       </section>
 
+      {homeServerDown ? (
+        <div className="opus-alert" role="alert">
+          Home server offline —{" "}
+          {!clipHealthy ? "SupoClip isn't reachable" : null}
+          {!clipHealthy && !postHealthy ? " and " : null}
+          {!postHealthy ? (
+            <>
+              the TikTok publisher hasn&apos;t checked in
+              {health?.publisherLastSeenAt
+                ? ` (last seen ${formatRelative(health.publisherLastSeenAt)})`
+                : ""}
+            </>
+          ) : null}
+          . Posting is paused until it&apos;s back.
+        </div>
+      ) : null}
+
       <section className="opus-pipeline" aria-label="Pipeline">
         <div className="opus-stage">
           <span className="opus-stage-icon">🔎</span>
@@ -290,7 +326,15 @@ export default function AutopilotDashboard() {
         <span className="opus-stage-arrow" aria-hidden="true">→</span>
         <div className="opus-stage">
           <span className="opus-stage-icon">✂️</span>
-          <strong>Clip</strong>
+          <strong>
+            Clip
+            {isSupoclip ? (
+              <span
+                className={`opus-health-dot ${clipHealthy ? "on" : "off"}`}
+                title={clipHealthy ? "SupoClip reachable" : "SupoClip unreachable"}
+              />
+            ) : null}
+          </strong>
           <span className="opus-hint">{engine} · {settings?.max_clips_per_source ?? 4}/video</span>
         </div>
         <span className="opus-stage-arrow" aria-hidden="true">→</span>
@@ -302,7 +346,19 @@ export default function AutopilotDashboard() {
         <span className="opus-stage-arrow" aria-hidden="true">→</span>
         <div className="opus-stage">
           <span className="opus-stage-icon">📲</span>
-          <strong>Post</strong>
+          <strong>
+            Post
+            {isSupoclip ? (
+              <span
+                className={`opus-health-dot ${postHealthy ? "on" : "off"}`}
+                title={
+                  postHealthy
+                    ? "Publisher agent online"
+                    : "Publisher agent offline"
+                }
+              />
+            ) : null}
+          </strong>
           <span className="opus-hint">TikTok · {postedToday} today</span>
         </div>
       </section>

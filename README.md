@@ -35,6 +35,7 @@ Run migrations in order in **SQL Editor**:
 2. `supabase/migrations/20250629000000_post_metrics.sql`
 3. `supabase/migrations/20250630000000_wayinvideo_autopilot.sql`
 4. `supabase/migrations/20250702000000_supoclip_default.sql`
+5. `supabase/migrations/20250702010000_home_server_status.sql`
 
 ### 2. Environment variables (`.env.local` + host)
 
