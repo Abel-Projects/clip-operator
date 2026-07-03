@@ -66,18 +66,49 @@ type Suggestion = {
   thumbnail_url: string | null;
 };
 
-const PROCESSING_STATUSES: CampaignStatus[] = ["pending", "clipping", "scheduling", "active"];
+type ProcessingSnapshot = {
+  clipJob: {
+    id: string;
+    source_url: string;
+    status: string;
+    clip_provider: string;
+    provider_project_id: string | null;
+    error_message: string | null;
+  } | null;
+  supoclip: {
+    status: string;
+    processing: boolean;
+    clipCount: number;
+    progressMessage: string | null;
+  } | null;
+  publishing: {
+    activeCampaigns: number;
+    queuedPosts: number;
+  };
+};
 
-function processingLabel(status: CampaignStatus): string {
+const CLIP_PIPELINE_STATUSES: CampaignStatus[] = ["pending", "clipping", "scheduling"];
+
+function processingLabel(status: CampaignStatus, supoclip?: ProcessingSnapshot["supoclip"]): string {
+  if (status === "clipping" && supoclip?.progressMessage) {
+    return supoclip.progressMessage;
+  }
+  if (status === "clipping" && supoclip) {
+    if (supoclip.processing) {
+      return `SupoClip is working (${supoclip.status})…`;
+    }
+    if (supoclip.clipCount > 0) {
+      return `SupoClip finished — ${supoclip.clipCount} clip(s) ready`;
+    }
+  }
+
   switch (status) {
     case "pending":
-      return "Queued for clipping";
+      return "Waiting to start in SupoClip";
     case "clipping":
-      return "Clipping the best moments…";
+      return "Clipping in SupoClip…";
     case "scheduling":
-      return "Scheduling posts…";
-    case "active":
-      return "Posting clips to TikTok…";
+      return "Scheduling TikTok posts…";
     default:
       return status;
   }
@@ -95,6 +126,7 @@ export default function AutopilotDashboard() {
   const [monitorSummary, setMonitorSummary] = useState<MonitorSummary | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
+  const [processingSnapshot, setProcessingSnapshot] = useState<ProcessingSnapshot | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [votingId, setVotingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,12 +136,14 @@ export default function AutopilotDashboard() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const loadDashboard = useCallback(async () => {
-    const [campaignRes, settingsRes, monitorRes, healthRes, suggestRes] = await Promise.all([
+    const [campaignRes, settingsRes, monitorRes, healthRes, suggestRes, processingRes] =
+      await Promise.all([
       authFetch("/api/autopilot/campaigns"),
       authFetch("/api/autopilot/settings"),
       authFetch("/api/autopilot/monitor"),
       authFetch("/api/autopilot/health"),
-      authFetch("/api/autopilot/suggestions")
+      authFetch("/api/autopilot/suggestions"),
+      authFetch("/api/autopilot/processing")
     ]);
 
     if (
@@ -138,6 +172,9 @@ export default function AutopilotDashboard() {
     const suggestData = (await suggestRes.json().catch(() => ({}))) as {
       suggestions?: Suggestion[];
     };
+    const processingData = (await processingRes.json().catch(() => ({}))) as {
+      processing?: ProcessingSnapshot;
+    };
 
     if (!campaignData.ok) {
       throw new Error(campaignData.message ?? "Could not load autopilot.");
@@ -149,6 +186,7 @@ export default function AutopilotDashboard() {
     setMonitorSummary(monitorData.summary ?? null);
     setHealth(healthData.health ?? null);
     setSuggestions(suggestData.suggestions ?? []);
+    setProcessingSnapshot(processingData.processing ?? null);
 
     if (settingsData.settings) {
       setSettings(settingsData.settings);
@@ -310,8 +348,13 @@ export default function AutopilotDashboard() {
   const postHealthy = !isSupoclip || (health?.publisherOnline ?? false);
   const homeServerDown = running && isSupoclip && health != null && (!clipHealthy || !postHealthy);
 
-  const processing = campaigns.find((c) => PROCESSING_STATUSES.includes(c.status)) ?? null;
-  const processingThumb = processing ? youtubeThumbnail(processing.source_url) : null;
+  const clipJob = processingSnapshot?.clipJob ?? null;
+  const clipProcessing =
+    clipJob && CLIP_PIPELINE_STATUSES.includes(clipJob.status as CampaignStatus)
+      ? clipJob
+      : null;
+  const processingThumb = clipProcessing ? youtubeThumbnail(clipProcessing.source_url) : null;
+  const publishing = processingSnapshot?.publishing ?? { activeCampaigns: 0, queuedPosts: 0 };
 
   return (
     <SiteShell wide>
@@ -369,46 +412,81 @@ export default function AutopilotDashboard() {
         </div>
       </section>
 
-      {/* Currently processing */}
-      {processing ? (
-        <section className="opus-panel opus-processing-card">
-          <div className="opus-processing-thumb">
-            {processingThumb ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={processingThumb} alt="" />
-            ) : (
-              <div className="opus-processing-thumb-fallback">▶</div>
-            )}
-            <span className="opus-processing-badge">Processing</span>
+      {/* SupoClip pipeline — only shows work actually in SupoClip, not TikTok publishing */}
+      <section className="opus-panel">
+        <div className="opus-section-head">
+          <div>
+            <h2>SupoClip</h2>
+            <p className="opus-hint">Live clip pipeline — matches what SupoClip is working on.</p>
           </div>
-          <div className="opus-processing-info">
-            <h3>{processingLabel(processing.status)}</h3>
+        </div>
+        {clipProcessing ? (
+          <div className="opus-processing-card">
+            <div className="opus-processing-thumb">
+              {processingThumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={processingThumb} alt="" />
+              ) : (
+                <div className="opus-processing-thumb-fallback">▶</div>
+              )}
+              <span className="opus-processing-badge">
+                {clipProcessing.status === "clipping" ? "Clipping" : "Queued"}
+              </span>
+            </div>
+            <div className="opus-processing-info">
+              <h3>
+                {processingLabel(
+                  clipProcessing.status as CampaignStatus,
+                  processingSnapshot?.supoclip
+                )}
+              </h3>
+              <p className="opus-hint">
+                {providerLabel(clipProcessing.clip_provider)} · up to{" "}
+                {settings?.max_clips_per_source ?? 4} clips
+                {processingSnapshot?.supoclip?.status
+                  ? ` · task ${processingSnapshot.supoclip.status}`
+                  : ""}
+              </p>
+              <div className="opus-processing-links">
+                <a
+                  href={clipProcessing.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="opus-textlink"
+                >
+                  View source video ↗
+                </a>
+                <Link href="/supoclip" className="opus-textlink">
+                  Open SupoClip ↗
+                </Link>
+              </div>
+              {clipProcessing.error_message ? (
+                <p className="opus-error">{clipProcessing.error_message}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="opus-processing-empty opus-processing-idle">
+            <p className="opus-processing-idle-title">SupoClip is idle</p>
             <p className="opus-hint">
-              Clipping with {providerLabel(processing.clip_provider)} · up to{" "}
-              {settings?.max_clips_per_source ?? 4} clips
+              {running
+                ? "No videos are clipping right now. Upvote a recommendation below or paste a YouTube link."
+                : "Autopilot is paused. Turn it on or add a video below."}
             </p>
-            <a
-              href={processing.source_url}
-              target="_blank"
-              rel="noreferrer"
-              className="opus-textlink"
-            >
-              View source video ↗
-            </a>
-            {processing.error_message ? (
-              <p className="opus-error">{processing.error_message}</p>
+            {publishing.queuedPosts > 0 ? (
+              <p className="opus-hint">
+                TikTok publisher has {publishing.queuedPosts} clip
+                {publishing.queuedPosts === 1 ? "" : "s"} queued from{" "}
+                {publishing.activeCampaigns} finished source
+                {publishing.activeCampaigns === 1 ? "" : "s"}.
+              </p>
             ) : null}
+            <Link href="/supoclip" className="opus-textlink">
+              Open SupoClip editor →
+            </Link>
           </div>
-        </section>
-      ) : (
-        <section className="opus-panel opus-processing-empty">
-          <p className="opus-hint">
-            {running
-              ? "Nothing processing right now — autopilot will pull the next source shortly."
-              : "Autopilot is paused. Turn it on or add a video below."}
-          </p>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* Add a video now */}
       <section className="opus-panel opus-addnow">
@@ -439,7 +517,7 @@ export default function AutopilotDashboard() {
       </section>
 
       {/* Suggestion vote queue — always visible so you know where to curate */}
-      <section className="opus-panel">
+      <section className="opus-panel opus-suggest-panel">
         <div className="opus-section-head">
           <div>
             <h2>Up next — you decide</h2>
@@ -493,10 +571,16 @@ export default function AutopilotDashboard() {
             ))}
           </div>
         ) : (
-          <p className="opus-hint">
-            No recommendations yet — discovery runs every few minutes and looks for 15–30 minute
-            interviews. Check back shortly, or paste a YouTube link above.
-          </p>
+          <div className="opus-suggest-empty">
+            <div className="opus-suggest-empty-icon" aria-hidden="true">
+              ▶
+            </div>
+            <p className="opus-suggest-empty-title">No recommendations yet</p>
+            <p className="opus-hint">
+              Discovery runs every few minutes and looks for 15–30 minute interviews. Check back
+              shortly, or paste a YouTube link above.
+            </p>
+          </div>
         )}
       </section>
 

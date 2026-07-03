@@ -44,6 +44,7 @@ export type SupoClipClipsResult =
       clips: SupoClipClip[];
       processing: boolean;
       status: string;
+      progressMessage?: string;
     }
   | {
       ok: false;
@@ -513,7 +514,8 @@ export async function getSupoClipProjectClips(
       mode: "live",
       clips,
       processing,
-      status
+      status,
+      progressMessage: task.progress_message
     };
   } catch (error) {
     return {

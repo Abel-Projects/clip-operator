@@ -1417,6 +1417,29 @@ select.opus-input {
   text-align: center;
 }
 
+.opus-processing-idle {
+  padding: 28px 20px 32px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.opus-processing-idle-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.opus-processing-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 4px;
+}
+
 .opus-processing-thumb {
   position: relative;
   width: 220px;
@@ -1487,11 +1510,49 @@ select.opus-input {
 }
 
 /* --- Suggestion vote queue --- */
+.opus-suggest-panel {
+  min-height: 280px;
+}
+
+.opus-suggest-empty {
+  min-height: 220px;
+  margin-top: 8px;
+  padding: 36px 24px 40px;
+  border: 1px dashed var(--line);
+  border-radius: 20px;
+  background: rgba(127, 127, 127, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+}
+
+.opus-suggest-empty-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: rgba(127, 127, 127, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.opus-suggest-empty-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
 .opus-suggest-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
 }
 
 .opus-suggest-card {
