@@ -370,7 +370,7 @@ async function maybeDiscoverAndQueue(
   }
 
   // Always refresh the suggestion queue so the user has things to vote on.
-  const candidates = await discoverCandidates(settings, 8);
+  const candidates = await discoverCandidates(settings, 12);
   const recorded = await recordSuggestions(candidates);
   if (recorded > 0) {
     actions.push(`Discovery: added ${recorded} new suggestion(s) to the queue`);

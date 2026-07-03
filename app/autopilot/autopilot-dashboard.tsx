@@ -438,17 +438,17 @@ export default function AutopilotDashboard() {
         </div>
       </section>
 
-      {/* Suggestion vote queue */}
-      {suggestions.length > 0 ? (
-        <section className="opus-panel">
-          <div className="opus-section-head">
-            <div>
-              <h2>Up next — you decide</h2>
-              <p className="opus-hint">
-                Videos autopilot found. Upvote to clip &amp; post, downvote to skip.
-              </p>
-            </div>
+      {/* Suggestion vote queue — always visible so you know where to curate */}
+      <section className="opus-panel">
+        <div className="opus-section-head">
+          <div>
+            <h2>Up next — you decide</h2>
+            <p className="opus-hint">
+              Long-form videos autopilot found. Upvote to clip &amp; post, downvote to skip.
+            </p>
           </div>
+        </div>
+        {suggestions.length > 0 ? (
           <div className="opus-suggest-grid">
             {suggestions.map((s) => (
               <article key={s.id} className="opus-suggest-card">
@@ -492,8 +492,13 @@ export default function AutopilotDashboard() {
               </article>
             ))}
           </div>
-        </section>
-      ) : null}
+        ) : (
+          <p className="opus-hint">
+            No recommendations yet — discovery runs every few minutes and looks for 15–30 minute
+            interviews. Check back shortly, or paste a YouTube link above.
+          </p>
+        )}
+      </section>
 
       <MonitorSection
         posts={monitorPosts}

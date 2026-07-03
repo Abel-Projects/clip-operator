@@ -231,12 +231,12 @@ export async function discoverCandidates(
   const candidateIds: string[] = [];
 
   for (const channelId of parseChannelList(settings)) {
-    candidateIds.push(...(await latestFromChannel(apiKey, channelId, 20)));
+    candidateIds.push(...(await latestFromChannel(apiKey, channelId, 30)));
   }
   for (const keyword of parseKeywordList(settings)) {
     // medium = 4–20 min, long = 20+ min — we narrow to 15–30 min after fetching details.
-    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 8, "medium")));
-    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 8, "long")));
+    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 10, "medium")));
+    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 10, "long")));
   }
 
   const uniqueIds = [...new Set(candidateIds)];
