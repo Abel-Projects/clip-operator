@@ -1,0 +1,50 @@
+---
+description: Home server is separate from dev machines; how agents connect and deploy
+alwaysApply: true
+---
+
+# Home server vs dev machines
+
+**Never treat the current machine as the home server.** Dev machines (Windows PC, Mac, phone) are for Cursor, git, and local `pnpm dev` only.
+
+| Host | Role |
+|------|------|
+| **Vercel** | Next.js app + dashboard (`https://clip-operator.vercel.app`) |
+| **Home server** | SupoClip + TikTok publisher, 24/7 |
+| **This machine** | Development only |
+
+## Before changing production infra
+
+1. Read `deploy/HOME-SERVER.md` and `deploy/home-server.env` (if present).
+2. Use `deploy/remote.ps1` / `deploy/remote.sh` for SSH — do not run `install-windows-home-server.ps1` on a dev PC.
+3. Do not use Cloudflare quick tunnels (`trycloudflare.com`).
+
+## Connection (local Cursor)
+
+SSH over Tailscale — see `deploy/ssh-config.example` and `deploy/home-server.env.example`.
+
+## Connection (Cloud Cursor)
+
+Cloud agents cannot reach private Tailscale IPs. Deploy via **git push → GitHub Actions self-hosted runner** on the home server (`.github/workflows/deploy-home-server.yml`).
+
+## Publisher
+
+Home server publisher polls **Vercel** (`CLIP_OPERATOR_URL=https://clip-operator.vercel.app`), not localhost. Heartbeats land in Supabase — both Vercel and local dev read the same status.
+
+## Local dev on this PC (localhost:3000)
+
+Daily workflow — tunnel home-server SupoClip, then Clip Operator:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/start-dev.ps1
+```
+
+Or: `deploy/dev-tunnel.ps1` (leave open) + `pnpm dev`.
+
+| URL | What |
+|-----|------|
+| http://localhost:3000 | Clip Operator dashboard |
+| http://localhost:3107 | SupoClip UI (tunneled from home server) |
+| http://localhost:8000 | SupoClip API (tunneled) |
+
+Production dashboard: https://clip-operator.vercel.app

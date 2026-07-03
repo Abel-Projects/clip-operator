@@ -13,3 +13,5 @@ tsconfig.tsbuildinfo
 .deploy-app-password.txt
 .vercel
 .env*
+!**/*.env.example
+deploy/home-server.env

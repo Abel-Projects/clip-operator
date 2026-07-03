@@ -2,7 +2,8 @@
 """
 Poll clip-operator for due SupoClip posts, download clips locally, upload to TikTok.
 
-Runs on the home server next to SupoClip. Uses tiktok-uploader (Playwright + cookies).
+Runs on the home server next to SupoClip. Default upload backend is TikTokAutoUploader
+(fast HTTP). Legacy Playwright + cookies.txt remains available as fallback.
 """
 
 from __future__ import annotations
@@ -142,19 +143,38 @@ def truncate_caption(text: str, max_len: int = 150) -> str:
 
 
 def upload_to_tiktok(video_path: Path, description: str) -> None:
-    cookies = require_env("TIKTOK_COOKIES_PATH")
-    caption = truncate_caption(description, 150)
-    timeout_sec = int(env("UPLOAD_TIMEOUT_SEC", "480"))
+    caption = truncate_caption(description, 2200)
+    timeout_sec = int(env("UPLOAD_TIMEOUT_SEC", "120"))
+    account_name = env("TIKTOK_ACCOUNT_NAME")
+
+    if account_name:
+        from tiktok_upload_fast import upload_via_auto_uploader
+
+        upload_via_auto_uploader(
+            video_path,
+            caption,
+            account_name,
+            timeout_sec=timeout_sec,
+        )
+        return
+
+    cookies = env("TIKTOK_COOKIES_PATH")
+    if not cookies:
+        raise RuntimeError(
+            "Set TIKTOK_ACCOUNT_NAME (recommended — run setup-uploader.ps1) "
+            "or TIKTOK_COOKIES_PATH for legacy Playwright uploads."
+        )
 
     from tiktok_upload import upload_from_env
 
+    legacy_timeout = int(env("UPLOAD_TIMEOUT_SEC", "480"))
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(upload_from_env, video_path, caption, cookies)
         try:
-            future.result(timeout=timeout_sec)
+            future.result(timeout=legacy_timeout)
         except FuturesTimeoutError as exc:
             raise RuntimeError(
-                f"TikTok upload timed out after {timeout_sec}s"
+                f"TikTok upload timed out after {legacy_timeout}s"
             ) from exc
 
 

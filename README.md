@@ -68,19 +68,21 @@ curl -X POST http://localhost:3000/api/cron/autopilot -H "Authorization: Bearer 
 
 ### 4. Deploy
 
-**Home server (recommended, free TikTok path):** one Docker stack runs the app plus an
-internal cron loop. See [`deploy/README.md`](deploy/README.md).
+**Production (recommended):** app on **Vercel**, SupoClip + TikTok publisher on a **24/7 home
+server**. Vercel reaches SupoClip via **Tailscale Funnel** (not Cloudflare quick tunnels).
+See [`deploy/README.md`](deploy/README.md).
 
-```bash
-cd deploy
-docker compose --env-file ../.env.local up -d --build
+```powershell
+# On the home server:
+powershell -ExecutionPolicy Bypass -File deploy/install-windows-home-server.ps1
+tailscale funnel --bg 8000
+tailscale funnel --bg 3107
+# → copy https://*.ts.net URLs into Vercel SUPOCLIP_* env vars
 ```
 
-SupoClip and the [TikTok publisher](home-server/tiktok-publisher) run alongside it on the
-same box. A systemd timer is provided as an alternative to the cron container.
+Use [cron-job.org](scripts/cron-job.org.txt) to hit `/api/cron/autopilot` on Vercel.
 
-**Vercel (alternative):** set env vars and deploy. Use [cron-job.org](scripts/cron-job.org.txt)
-to hit `/api/cron/autopilot` if your plan limits Vercel cron.
+**Optional self-host:** run the full stack on one box with Docker — see `deploy/docker-compose.yml`.
 
 ## Default niche
 

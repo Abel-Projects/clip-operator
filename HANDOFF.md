@@ -19,10 +19,9 @@ home-server health dots, an "Add a video now" quick action, and a card feed of r
 posts. Manual upload lives at `/workbench`; the full SupoClip editor at `/supoclip`
 (both reachable via links, not top-level tabs).
 
-**Hosting:** Next.js app, now **self-hosted on a home server** via `deploy/docker-compose.yml`
-(app + internal cron loop). SupoClip and the TikTok publisher run on the same box.
-**Supabase** backs the job queue / state. `proxy.ts` is the Next 16 middleware that enforces
-`APP_PASSWORD` on `/api/*`. (Vercel remains a supported alternative.)
+**Hosting:** Next.js app on **Vercel** (`clip-operator.vercel.app`). **Home server** (separate
+24/7 machine) runs SupoClip + TikTok publisher. Dev PCs/Mac/phone are Cursor-only — never
+production hosts. Permanent access: [`deploy/HOME-SERVER.md`](deploy/HOME-SERVER.md).
 
 ### Clip / post engines (providers)
 All are kept; they are pluggable adapters in `lib/autopilot/providers/`:

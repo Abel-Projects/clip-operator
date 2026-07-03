@@ -1,60 +1,112 @@
-# Self-hosting Clip Operator on a home server (Linux)
+# Home server + Vercel
 
-Everything runs on one box. Three pieces cooperate:
+> **Permanent SSH / Cloud deploy setup:** [`HOME-SERVER.md`](HOME-SERVER.md)
 
-| Piece | What it is | How it runs |
-|-------|-----------|-------------|
-| **App** | The Next.js dashboard + autopilot brain + APIs | `deploy/docker-compose.yml` (`app` service) |
-| **Cron** | Ticks `/api/cron/autopilot` so the pipeline advances | `cron` service (or a systemd timer — see below) |
-| **SupoClip** | Self-hosted clip engine | its own docker project, reachable at `SUPOCLIP_BASE_URL` |
-| **Publisher** | Uploads queued clips to TikTok (Playwright + cookies) | `home-server/tiktok-publisher` |
+The app lives on **Vercel** (`https://clip-operator.vercel.app`). The home server runs
+only what must stay on 24/7 hardware: **SupoClip** (clip engine) and the **TikTok publisher**.
+```
+                    Vercel (clip-operator.vercel.app)
+                    ─────────────────────────────────
+YouTube discovery ─▶ autopilot cron ─▶ queue in Supabase
+                           │
+                           │  SUPOCLIP_BASE_URL (Tailscale Funnel)
+                           ▼
+Home server (24/7)         SupoClip :8000 / :3107
+                           │
+                           │  publisher polls Vercel
+                           ▼
+                           TikTok
+```
+
+## Why not Cloudflare?
+
+`trycloudflare.com` quick tunnels expire when the process stops. Use **Tailscale Funnel**
+instead — stable `https://*.ts.net` URLs tied to your home server.
+
+## One-shot install (Windows home server)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/install-windows-home-server.ps1
+```
+
+This starts SupoClip, sets up [TikTokAutoUploader](https://github.com/makiisthenes/TiktokAutoUploader),
+and registers a scheduled task that polls Vercel every 5 minutes.
+
+## Connect Vercel to SupoClip (Tailscale Funnel)
+
+On the home server, after SupoClip is running:
+
+```powershell
+tailscale funnel --bg 8000    # backend API  → SUPOCLIP_BASE_URL
+tailscale funnel --bg 3107    # frontend UI  → SUPOCLIP_FRONTEND_URL
+```
+
+Copy the printed `https://….ts.net` URLs into **Vercel → Project → Settings → Environment Variables**.
+
+Redeploy Vercel after changing env vars.
+
+## Vercel environment variables
+
+| Variable | Value |
+|----------|-------|
+| `SUPOCLIP_BASE_URL` | Tailscale funnel URL for port **8000** |
+| `SUPOCLIP_FRONTEND_URL` | Tailscale funnel URL for port **3107** |
+| `SUPOCLIP_USER_ID` | Same as home server |
+| `SUPOCLIP_AUTH_SECRET` | Same as home server |
+| `CRON_SECRET` | Same as home server publisher |
+| `SUPABASE_*`, `YOUTUBE_API_KEY`, `APP_PASSWORD` | As in `.env.example` |
+
+## Autopilot cron on Vercel
+
+Hobby plan: use [cron-job.org](scripts/cron-job.org.txt) to `POST` every 5 minutes:
 
 ```
-YouTube ─▶ App (discover) ─▶ SupoClip (clip) ─▶ App (caption + queue) ─▶ Publisher ─▶ TikTok
-                 ▲                                       │
-                 └──────────────── cron tick ───────────┘
+https://clip-operator.vercel.app/api/cron/autopilot
+Authorization: Bearer <CRON_SECRET>
 ```
 
-The dashboard shows a health dot for **SupoClip** (reachable?) and the **Publisher**
-(checked in recently?). If either goes down, posting stops and the dashboard says so.
+## Local dev (this PC)
 
-## 1. Configure
+Use an **SSH tunnel** so home-server SupoClip feels like localhost:
 
-Copy `.env.example` to `.env.local` at the repo root and fill it in. At minimum:
-`YOUTUBE_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`,
-`APP_PASSWORD`, and the `SUPOCLIP_*` values.
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy/start-dev.ps1
+```
 
-## 2. Run the app + cron
+Or run the tunnel and dev server separately:
+
+```powershell
+# Terminal 1 - leave open
+powershell -ExecutionPolicy Bypass -File deploy/dev-tunnel.ps1
+
+# Terminal 2
+pnpm dev
+```
+
+Then open:
+
+| URL | What |
+|-----|------|
+| http://localhost:3000 | Clip Operator dashboard |
+| http://localhost:3107 | SupoClip editor |
+| http://localhost:8000 | SupoClip API (via tunnel) |
+
+`.env.local` should use `http://localhost:8000` and `http://localhost:3107` — the tunnel forwards those to the home server.
+
+Production dashboard remains **https://clip-operator.vercel.app**.
+
+## Optional: fully self-hosted stack
+
+If you ever want the app off Vercel, `deploy/docker-compose.yml` runs app + cron + publisher
+on the home server. Tailscale Serve can expose the dashboard:
 
 ```bash
-cd deploy
-docker compose --env-file ../.env.local up -d --build
+tailscale serve --bg --https=443 http://127.0.0.1:3000
 ```
 
-App is now on `http://<home-server>:3000`. Put it behind a reverse proxy / Tailscale
-as you prefer.
-
-### Prefer a systemd timer instead of the cron container?
+## Optional: publisher in Docker (app still on Vercel)
 
 ```bash
-sudo cp -r . /opt/clip-operator
-sudo cp deploy/systemd/clip-operator-autopilot.* /etc/systemd/system/
-# set CLIP_OPERATOR_URL + CRON_SECRET in the .service (or an EnvironmentFile)
-sudo systemctl daemon-reload
-sudo systemctl enable --now clip-operator-autopilot.timer
+docker compose --env-file home-server/tiktok-publisher/.env \
+  -f deploy/docker-compose.publisher.yml up -d --build
 ```
-
-Either way you can trigger a tick by hand:
-
-```bash
-CRON_SECRET=xxx ./deploy/trigger-autopilot.sh
-```
-
-## 3. SupoClip + the TikTok publisher
-
-- Start SupoClip so it's reachable at `SUPOCLIP_BASE_URL` (default `http://localhost:8000`).
-- Run the publisher next to it — it needs Playwright and your exported TikTok cookies.
-  See [`home-server/tiktok-publisher/README.md`](../home-server/tiktok-publisher/README.md).
-  Point it at the app with `CLIP_OPERATOR_URL` and `PUBLISH_AGENT_SECRET` (or `CRON_SECRET`).
-
-Once the publisher is polling, the **Post** dot on the dashboard turns green.

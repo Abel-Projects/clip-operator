@@ -1,12 +1,7 @@
-# Self-hosted Clip Operator stack for a Linux home server.
+# Self-hosted Clip Operator stack (optional — app normally lives on Vercel).
 #
-#   docker compose --env-file ../.env.local up -d --build
-#
-# This runs the dashboard/app and an internal cron loop that drives autopilot.
-# SupoClip and the TikTok publisher agent run alongside this (see deploy/README.md):
-#   - SupoClip: its own docker project (reachable at SUPOCLIP_BASE_URL)
-#   - Publisher: home-server/tiktok-publisher (needs Playwright + TikTok cookies)
-
+# For Vercel + home server, see deploy/README.md and install-windows-home-server.ps1.
+# This compose is only if you want app + cron + publisher all on one box.
 services:
   app:
     build:
@@ -15,6 +10,8 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       NODE_ENV: production
       PORT: "3000"
@@ -23,24 +20,32 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       CRON_SECRET: ${CRON_SECRET}
       APP_PASSWORD: ${APP_PASSWORD}
-      SUPOCLIP_BASE_URL: ${SUPOCLIP_BASE_URL}
-      SUPOCLIP_FRONTEND_URL: ${SUPOCLIP_FRONTEND_URL}
+      SUPOCLIP_BASE_URL: ${SUPOCLIP_BASE_URL:-http://host.docker.internal:8000}
+      SUPOCLIP_FRONTEND_URL: ${SUPOCLIP_FRONTEND_URL:-http://host.docker.internal:3107}
       SUPOCLIP_USER_ID: ${SUPOCLIP_USER_ID}
       SUPOCLIP_AUTH_SECRET: ${SUPOCLIP_AUTH_SECRET}
       PUBLISH_AGENT_SECRET: ${PUBLISH_AGENT_SECRET}
       WAYINVIDEO_API_KEY: ${WAYINVIDEO_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/wayinvideo/config"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://localhost:3000/api/autopilot/health"
+        ]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 40s
 
-  # Drives the autopilot state machine (replaces Vercel cron).
   cron:
     image: curlimages/curl:8.11.1
     restart: unless-stopped
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     environment:
       CRON_SECRET: ${CRON_SECRET}
       CRON_INTERVAL_SEC: "${CRON_INTERVAL_SEC:-180}"
@@ -49,6 +54,35 @@ services:
       - -c
       - |
         while true; do
-          curl -fsS -X POST "http://app:3000/api/cron/autopilot" -H "Authorization: Bearer $${CRON_SECRET}" || echo "cron tick failed"
+          curl -fsS -X POST "http://app:3000/api/cron/autopilot" \
+            -H "Authorization: Bearer $${CRON_SECRET}" || echo "cron tick failed"
           sleep "$${CRON_INTERVAL_SEC}"
         done
+
+  publisher:
+    build:
+      context: ../home-server/tiktok-publisher
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CLIP_OPERATOR_URL: http://app:3000
+      PUBLISH_AGENT_SECRET: ${PUBLISH_AGENT_SECRET}
+      CRON_SECRET: ${CRON_SECRET}
+      SUPOCLIP_BASE_URL: ${SUPOCLIP_BASE_URL:-http://host.docker.internal:8000}
+      SUPOCLIP_USER_ID: ${SUPOCLIP_USER_ID}
+      SUPOCLIP_AUTH_SECRET: ${SUPOCLIP_AUTH_SECRET}
+      TIKTOK_ACCOUNT_NAME: ${TIKTOK_ACCOUNT_NAME}
+      TIKTOK_COOKIES_PATH: ${TIKTOK_COOKIES_PATH:-}
+      POLL_INTERVAL_SEC: "${PUBLISHER_POLL_INTERVAL_SEC:-300}"
+      UPLOAD_TIMEOUT_SEC: "${UPLOAD_TIMEOUT_SEC:-120}"
+    volumes:
+      # Persist TikTokAutoUploader session cookies across container restarts
+      - publisher-cookies:/publisher/vendor/TiktokAutoUploader/CookiesDir
+
+volumes:
+  publisher-cookies:

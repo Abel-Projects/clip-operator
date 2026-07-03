@@ -2,4 +2,5 @@
 cookies.txt
 .env
 .venv/
+vendor/
 __pycache__/

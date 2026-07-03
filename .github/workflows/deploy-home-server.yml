@@ -1,0 +1,44 @@
+# Deploy to the home server when main is pushed.
+# Requires a self-hosted runner on the home server labeled "home-server".
+# See deploy/HOME-SERVER.md — Cloud Cursor cannot SSH; this is the cloud path.
+
+name: Deploy home server
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "home-server/**"
+      - "deploy/**"
+      - "scripts/start-supoclip.ps1"
+      - ".github/workflows/deploy-home-server.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, home-server]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply home-server updates
+        shell: pwsh
+        run: |
+          Write-Host "Deploying from $PWD"
+          $pub = Join-Path $PWD "home-server\tiktok-publisher"
+          if (-not (Test-Path "$pub\.env") -and (Test-Path "deploy\.env.home-server.example")) {
+            Copy-Item "deploy\.env.home-server.example" "$pub\.env"
+            Write-Host "Created publisher .env — set secrets on home server"
+          }
+
+      - name: Restart publisher scheduled task
+        shell: pwsh
+        run: |
+          $task = Get-ScheduledTask -TaskName "SupoClipTikTokPublisher" -ErrorAction SilentlyContinue
+          if ($task) {
+            Stop-ScheduledTask -TaskName "SupoClipTikTokPublisher" -ErrorAction SilentlyContinue
+            Start-ScheduledTask -TaskName "SupoClipTikTokPublisher"
+            Write-Host "Publisher task restarted"
+          } else {
+            Write-Host "Run deploy/install-windows-home-server.ps1 once on the home server"
+          }

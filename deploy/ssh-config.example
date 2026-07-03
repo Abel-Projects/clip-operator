@@ -1,0 +1,9 @@
+# Merge into ~/.ssh/config (or Include this file from there).
+# Replace YOUR_TAILSCALE_NAME and YOUR_USER after Tailscale + OpenSSH setup.
+# See deploy/HOME-SERVER.md
+
+Host clip-home
+    HostName 100.75.239.27
+    User hunte
+    IdentityFile ~/.ssh/id_ed25519_clip
+    IdentitiesOnly yes
