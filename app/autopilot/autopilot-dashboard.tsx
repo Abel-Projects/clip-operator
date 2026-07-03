@@ -522,7 +522,8 @@ export default function AutopilotDashboard() {
           <div>
             <h2>Up next — you decide</h2>
             <p className="opus-hint">
-              Long-form videos autopilot found. Upvote to clip &amp; post, downvote to skip.
+              New finds auto-clip and post. Downvote anything you don&apos;t want — it won&apos;t
+              come back.
             </p>
           </div>
         </div>

@@ -512,6 +512,12 @@ export async function createCampaign(input: {
     throw new Error(error?.message ?? "Could not create campaign.");
   }
 
+  await supabase
+    .from("content_suggestions")
+    .update({ status: "approved", updated_at: new Date().toISOString() })
+    .eq("url", input.sourceUrl.trim())
+    .in("status", ["pending"]);
+
   return data;
 }
 
