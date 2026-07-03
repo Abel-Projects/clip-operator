@@ -64,8 +64,11 @@ export async function PATCH(req: Request) {
   if (typeof body.sources_per_day === "number") {
     patch.sources_per_day = Math.min(8, Math.max(1, body.sources_per_day));
   }
+  if (typeof body.min_source_duration_min === "number") {
+    patch.min_source_duration_min = Math.min(120, Math.max(1, body.min_source_duration_min));
+  }
   if (typeof body.max_source_duration_min === "number") {
-    patch.max_source_duration_min = Math.min(60, Math.max(5, body.max_source_duration_min));
+    patch.max_source_duration_min = Math.min(180, Math.max(5, body.max_source_duration_min));
   }
   if (typeof body.min_clip_score === "number") {
     patch.min_clip_score = Math.max(0, body.min_clip_score);

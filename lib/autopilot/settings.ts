@@ -12,16 +12,17 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   timezone: "America/New_York",
   enabled: true,
   sources_per_day: 4,
-  max_source_duration_min: 20,
+  min_source_duration_min: 15,
+  max_source_duration_min: 30,
   auto_approve_sources: true,
   discovery_keywords: [
-    "mark cuban interview entrepreneur",
-    "barbara corcoran interview advice",
-    "kevin o'leary interview business",
-    "daymond john entrepreneur interview",
-    "lori greiner interview startup",
-    "shark tank investor interview podcast",
-    "entrepreneur advice startup interview"
+    "mark cuban full interview podcast",
+    "barbara corcoran podcast interview entrepreneur",
+    "kevin o'leary long form interview business",
+    "daymond john podcast entrepreneur interview",
+    "lori greiner full interview startup",
+    "shark tank investor podcast interview",
+    "entrepreneur advice long interview"
   ],
   discovery_channels: [
     "UCnnQ2f4XSGDzLkgBGbecBaA",

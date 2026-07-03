@@ -101,15 +101,40 @@ function isUsableTitle(title: string): boolean {
     "shark tank compilation",
     "shark tank full episode",
     "shark tank season",
-    "#shorts"
+    "#shorts",
+    " youtube shorts"
   ];
-  return !blocked.some((phrase) => lower.includes(phrase));
+  if (blocked.some((phrase) => lower.includes(phrase))) {
+    return false;
+  }
+  return true;
+}
+
+function durationWindow(settings: AutopilotSettingsRow): {
+  minDurationSec: number;
+  maxDurationSec: number;
+} {
+  const minMinutes = Math.max(1, settings.min_source_duration_min ?? 15);
+  const maxMinutes = Math.max(minMinutes, settings.max_source_duration_min ?? 30);
+  return {
+    minDurationSec: minMinutes * 60,
+    maxDurationSec: maxMinutes * 60
+  };
+}
+
+function passesDurationFilter(
+  durationSec: number,
+  minDurationSec: number,
+  maxDurationSec: number
+): boolean {
+  return durationSec >= minDurationSec && durationSec <= maxDurationSec;
 }
 
 async function searchByKeyword(
   apiKey: string,
   query: string,
-  maxResults: number
+  maxResults: number,
+  videoDuration: "medium" | "long" = "medium"
 ): Promise<string[]> {
   const payload = await youtubeGet<{
     items?: Array<{ id?: { videoId?: string } }>;
@@ -119,6 +144,7 @@ async function searchByKeyword(
     q: query,
     maxResults: String(maxResults),
     order: "date",
+    videoDuration,
     relevanceLanguage: "en",
     safeSearch: "moderate"
   });
@@ -178,6 +204,16 @@ function thumbnailFor(videoId: string): string {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }
 
+/** Remove pending suggestions that no longer match the duration window. */
+async function pruneShortSuggestions(minDurationSec: number): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  await supabase
+    .from("content_suggestions")
+    .delete()
+    .eq("status", "pending")
+    .lt("duration_sec", minDurationSec);
+}
+
 /** Discover multiple candidate videos that pass the niche filters. */
 export async function discoverCandidates(
   settings: AutopilotSettingsRow,
@@ -188,15 +224,19 @@ export async function discoverCandidates(
     return [];
   }
 
-  const maxDurationSec = Math.max(60, settings.max_source_duration_min * 60);
+  const { minDurationSec, maxDurationSec } = durationWindow(settings);
+  await pruneShortSuggestions(minDurationSec);
+
   const known = await getKnownSourceUrls();
   const candidateIds: string[] = [];
 
   for (const channelId of parseChannelList(settings)) {
-    candidateIds.push(...(await latestFromChannel(apiKey, channelId, 5)));
+    candidateIds.push(...(await latestFromChannel(apiKey, channelId, 20)));
   }
   for (const keyword of parseKeywordList(settings)) {
-    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 5)));
+    // medium = 4–20 min, long = 20+ min — we narrow to 15–30 min after fetching details.
+    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 8, "medium")));
+    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 8, "long")));
   }
 
   const uniqueIds = [...new Set(candidateIds)];
@@ -213,7 +253,7 @@ export async function discoverCandidates(
 
     const meta = details.get(videoId);
     if (!meta) continue;
-    if (meta.durationSec <= 0 || meta.durationSec > maxDurationSec) continue;
+    if (!passesDurationFilter(meta.durationSec, minDurationSec, maxDurationSec)) continue;
     if (!isUsableTitle(meta.title)) continue;
 
     results.push({

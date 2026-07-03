@@ -21,6 +21,7 @@ export type AutopilotSettingsRow = {
   timezone: string;
   enabled: boolean;
   sources_per_day: number;
+  min_source_duration_min: number;
   max_source_duration_min: number;
   auto_approve_sources: boolean;
   discovery_keywords: string[] | unknown;
