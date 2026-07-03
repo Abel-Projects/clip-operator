@@ -53,6 +53,56 @@ function averageScore(clips: (number | null | undefined)[]): number | null {
   return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
 }
 
+function sortMonitorPosts(posts: MonitorPost[]): MonitorPost[] {
+  const rank = (status: PostStatus): number => {
+    switch (status) {
+      case "posted":
+        return 0;
+      case "posting":
+        return 1;
+      case "queued":
+        return 2;
+      default:
+        return 3;
+    }
+  };
+
+  return [...posts].sort((a, b) => {
+    const byStatus = rank(a.status) - rank(b.status);
+    if (byStatus !== 0) {
+      return byStatus;
+    }
+
+    if (a.status === "posted" && b.status === "posted") {
+      return (
+        new Date(b.postedAt ?? b.scheduledAt).getTime() -
+        new Date(a.postedAt ?? a.scheduledAt).getTime()
+      );
+    }
+
+    return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+  });
+}
+
+async function countPostsByStatus(): Promise<Pick<MonitorSummary, "posted" | "queued" | "failed">> {
+  const supabase = getSupabaseAdmin();
+  const [posted, queued, posting, failed] = await Promise.all(
+    (["posted", "queued", "posting", "failed"] as const).map(async (status) => {
+      const { count } = await supabase
+        .from("scheduled_posts")
+        .select("*", { count: "exact", head: true })
+        .eq("status", status);
+      return count ?? 0;
+    })
+  );
+
+  return {
+    posted,
+    queued: queued + posting,
+    failed
+  };
+}
+
 export async function getMonitorFeed(limit = 50): Promise<{
   posts: MonitorPost[];
   summary: MonitorSummary;
@@ -123,20 +173,18 @@ export async function getMonitorFeed(limit = 50): Promise<{
     };
   });
 
-  const posted = rows.filter((row) => row.status === "posted").length;
-  const queued = rows.filter((row) => row.status === "queued").length;
-  const failed = rows.filter((row) => row.status === "failed").length;
+  const statusCounts = await countPostsByStatus();
   const metricsPending = rows.filter(
     (row) => row.status === "posted" && row.views == null
   ).length;
 
   return {
-    posts: feed,
+    posts: sortMonitorPosts(feed),
     summary: {
       totalPosts: rows.length,
-      posted,
-      queued,
-      failed,
+      posted: statusCounts.posted,
+      queued: statusCounts.queued,
+      failed: statusCounts.failed,
       avgClipScore: averageScore(feed.map((post) => post.clip?.score ?? null)),
       metricsPending
     }

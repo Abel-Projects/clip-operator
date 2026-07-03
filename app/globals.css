@@ -1646,6 +1646,8 @@ select.opus-input {
   position: absolute;
   top: 8px;
   left: 8px;
+  max-width: calc(100% - 16px);
+  white-space: nowrap;
 }
 
 .opus-post-links {

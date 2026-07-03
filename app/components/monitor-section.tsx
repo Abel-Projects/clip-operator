@@ -48,7 +48,7 @@ type MonitorSectionProps = {
   clearingFailed?: boolean;
 };
 
-function statusClass(status: PostStatus) {
+function statusClass(status: PostStatus, scheduledAt: string) {
   switch (status) {
     case "posted":
       return "ok";
@@ -56,22 +56,52 @@ function statusClass(status: PostStatus) {
       return "bad";
     case "posting":
       return "active";
+    case "queued":
+      return new Date(scheduledAt).getTime() <= Date.now() ? "active" : "";
     default:
       return "";
   }
 }
 
-function statusLabel(status: PostStatus) {
+function statusLabel(status: PostStatus, scheduledAt: string) {
   switch (status) {
     case "posted":
       return "Posted";
     case "posting":
-      return "Posting…";
+      return "Publishing";
     case "failed":
       return "Failed";
+    case "queued":
+      return new Date(scheduledAt).getTime() <= Date.now() ? "Due now" : "Queued";
     default:
-      return "Queued";
+      return status;
   }
+}
+
+function whenLabel(post: MonitorPost): string {
+  if (post.status === "posted" && post.postedAt) {
+    return `Posted ${formatRelative(post.postedAt)}`;
+  }
+  if (post.status === "posting") {
+    return "Publishing to TikTok…";
+  }
+  if (post.status === "failed") {
+    return `Failed ${formatRelative(post.scheduledAt)}`;
+  }
+  if (new Date(post.scheduledAt).getTime() <= Date.now()) {
+    return `Due ${formatRelative(post.scheduledAt)}`;
+  }
+  return `Up next ${formatRelative(post.scheduledAt)}`;
+}
+
+function visibleError(message: string | null, status: PostStatus): string | null {
+  if (!message || status === "queued") {
+    return null;
+  }
+  if (message.startsWith("claim:")) {
+    return null;
+  }
+  return message;
 }
 
 export default function MonitorSection({
@@ -83,7 +113,11 @@ export default function MonitorSection({
 }: MonitorSectionProps) {
   const [filter, setFilter] = useState<"all" | PostStatus>("all");
   const visiblePosts =
-    filter === "all" ? posts : posts.filter((post) => post.status === filter);
+    filter === "all"
+      ? posts
+      : filter === "queued"
+        ? posts.filter((post) => post.status === "queued" || post.status === "posting")
+        : posts.filter((post) => post.status === filter);
 
   return (
     <section className="opus-panel opus-monitor" id="monitor">
@@ -112,14 +146,18 @@ export default function MonitorSection({
       </div>
 
       <div className="opus-filter-row">
-        {(["all", "posted", "queued", "failed"] as const).map((entry) => (
+        {(["all", "posted", "queued", "posting", "failed"] as const).map((entry) => (
           <button
             key={entry}
             type="button"
             className={`opus-filter-tab ${filter === entry ? "active" : ""}`}
             onClick={() => setFilter(entry)}
           >
-            {entry === "all" ? "All" : entry.charAt(0).toUpperCase() + entry.slice(1)}
+            {entry === "all"
+              ? "All"
+              : entry === "posting"
+                ? "Publishing"
+                : entry.charAt(0).toUpperCase() + entry.slice(1)}
           </button>
         ))}
       </div>
@@ -139,15 +177,15 @@ export default function MonitorSection({
               cleanCaption(post.captionTitle) ||
               cleanCaption(post.clip?.title) ||
               post.providerClipId;
-            const when =
-              post.status === "posted"
-                ? `Posted ${formatRelative(post.postedAt)}`
-                : `Scheduled ${formatRelative(post.scheduledAt)}`;
+            const when = whenLabel(post);
             const thumb = youtubeThumbnail(post.campaign?.sourceUrl);
             const clipUrl = post.clip?.previewUrl ?? null;
+            const pillClass = statusClass(post.status, post.scheduledAt);
+            const pillLabel = statusLabel(post.status, post.scheduledAt);
+            const errorText = visibleError(post.errorMessage, post.status);
 
             return (
-              <article key={post.id} className={`opus-post-card ${statusClass(post.status)}`}>
+              <article key={post.id} className={`opus-post-card ${pillClass}`}>
                 <div className="opus-post-thumb">
                   {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -155,8 +193,8 @@ export default function MonitorSection({
                   ) : (
                     <div className="opus-processing-thumb-fallback">▶</div>
                   )}
-                  <span className={`opus-pill ${statusClass(post.status)} opus-post-thumb-pill`}>
-                    {statusLabel(post.status)}
+                  <span className={`opus-pill ${pillClass} opus-post-thumb-pill`}>
+                    {pillLabel}
                   </span>
                 </div>
 
@@ -164,8 +202,8 @@ export default function MonitorSection({
                   {caption}
                 </p>
 
-                {post.errorMessage ? (
-                  <p className="opus-error opus-post-error">{post.errorMessage}</p>
+                {errorText ? (
+                  <p className="opus-error opus-post-error">{errorText}</p>
                 ) : null}
 
                 <div className="opus-post-meta">
