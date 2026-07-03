@@ -78,6 +78,7 @@ Pop-Location
 # --- 4. Scheduled publisher task ---
 Write-Host "`n[3/3] Registering publisher (every 5 min)..." -ForegroundColor Cyan
 Push-Location $publisherDir
+& .\sync-env.ps1
 & .\install-scheduled-task.ps1
 Pop-Location
 

@@ -241,7 +241,7 @@ export async function completePublishJob(
   }
 
   const transient =
-    /timeout|timed out|modal|post button|upload failed|hung/i.test(
+    /timeout|timed out|modal|post button|upload failed|hung|clip download failed|invalid auth signature/i.test(
       result.message ?? ""
     );
 
