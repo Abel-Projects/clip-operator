@@ -19,7 +19,8 @@ export function proxy(request: NextRequest) {
 
   if (
     request.nextUrl.pathname.startsWith("/api/cron/") ||
-    request.nextUrl.pathname.startsWith("/api/autopilot/publish-jobs/")
+    request.nextUrl.pathname.startsWith("/api/autopilot/publish-jobs/") ||
+    request.nextUrl.pathname.startsWith("/api/autopilot/clip-jobs/")
   ) {
     return NextResponse.next();
   }
