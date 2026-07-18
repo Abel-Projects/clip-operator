@@ -201,7 +201,7 @@ export async function claimNextSupoclipPublishJob(): Promise<PublishJob | null> 
 
 export async function completePublishJob(
   postId: string,
-  result: { ok: boolean; message?: string }
+  result: { ok: boolean; message?: string; tiktokUrl?: string | null }
 ): Promise<{ ok: boolean; message: string }> {
   const supabase = getSupabaseAdmin();
 
@@ -224,13 +224,18 @@ export async function completePublishJob(
   }
 
   if (result.ok) {
+    const patch: Partial<ScheduledPostRow> = {
+      status: "posted",
+      posted_at: new Date().toISOString(),
+      error_message: null
+    };
+    if (result.tiktokUrl) {
+      patch.tiktok_url = result.tiktokUrl;
+    }
+
     const { error } = await supabase
       .from("scheduled_posts")
-      .update({
-        status: "posted",
-        posted_at: new Date().toISOString(),
-        error_message: null
-      })
+      .update(patch)
       .eq("id", postId);
 
     if (error) {

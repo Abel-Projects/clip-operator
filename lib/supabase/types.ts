@@ -94,6 +94,7 @@ export type ScheduledPostRow = {
   comments: number | null;
   shares: number | null;
   metrics_synced_at: string | null;
+  tiktok_url: string | null;
   created_at: string;
 };
 

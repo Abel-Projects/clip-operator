@@ -25,9 +25,13 @@ export async function POST(req: Request, context: RouteContext) {
 
   const { id } = await context.params;
 
-  let body: { ok?: boolean; message?: string } = {};
+  let body: { ok?: boolean; message?: string; tiktokUrl?: string } = {};
   try {
-    body = (await req.json()) as { ok?: boolean; message?: string };
+    body = (await req.json()) as {
+      ok?: boolean;
+      message?: string;
+      tiktokUrl?: string;
+    };
   } catch {
     return NextResponse.json(
       { ok: false, message: "Invalid JSON body." },
@@ -45,7 +49,11 @@ export async function POST(req: Request, context: RouteContext) {
   try {
     const result = await completePublishJob(id, {
       ok: body.ok,
-      message: body.message
+      message: body.message,
+      tiktokUrl:
+        typeof body.tiktokUrl === "string" && body.tiktokUrl.trim()
+          ? body.tiktokUrl.trim()
+          : undefined
     });
     return NextResponse.json(result, { status: result.ok ? 200 : 404 });
   } catch (error) {

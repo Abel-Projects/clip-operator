@@ -102,15 +102,47 @@ def claim_next_job() -> dict | None:
     return payload.get("job")
 
 
-def complete_job(post_id: str, ok: bool, message: str) -> None:
+def complete_job(
+    post_id: str,
+    ok: bool,
+    message: str,
+    *,
+    tiktok_url: str | None = None,
+) -> None:
     base = require_env("CLIP_OPERATOR_URL").rstrip("/")
     secret = env("PUBLISH_AGENT_SECRET") or env("CRON_SECRET")
+    body: dict = {"ok": ok, "message": message}
+    if tiktok_url:
+        body["tiktokUrl"] = tiktok_url
     http_json(
         "POST",
         f"{base}/api/autopilot/publish-jobs/{post_id}/complete",
-        body={"ok": ok, "message": message},
+        body=body,
         headers={"Authorization": f"Bearer {secret}"},
     )
+
+
+def maybe_sync_metrics() -> None:
+    """When idle, scrape Studio stats so the winner loop has real views."""
+    try:
+        from metrics_agent import run_once as metrics_run_once
+    except ImportError:
+        # File is metrics-agent.py (hyphen) — load by path
+        import importlib.util
+
+        path = Path(__file__).resolve().parent / "metrics-agent.py"
+        spec = importlib.util.spec_from_file_location("metrics_agent", path)
+        if spec is None or spec.loader is None:
+            print("metrics-agent.py not found; skipping metrics sync.")
+            return
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        metrics_run_once = module.run_once
+
+    try:
+        metrics_run_once(force=False)
+    except Exception as exc:  # noqa: BLE001 — don't fail publish loop
+        print(f"Metrics sync error: {exc}", file=sys.stderr)
 
 
 def download_clip(project_id: str, clip_id: str, dest: Path) -> None:
@@ -182,6 +214,7 @@ def run_once() -> bool:
     job = claim_next_job()
     if not job:
         print("No due SupoClip publish jobs.")
+        maybe_sync_metrics()
         return False
 
     post_id = job["id"]
