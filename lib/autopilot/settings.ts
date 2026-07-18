@@ -13,19 +13,20 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   enabled: true,
   sources_per_day: 6,
   min_source_duration_min: 30,
-  max_source_duration_min: 120,
+  max_source_duration_min: 150,
   auto_approve_sources: true,
   discovery_keywords: [
+    "shark tank us full pitch long",
+    "shark tank bidding wars full",
+    "shark tank young entrepreneurs full",
     "mark cuban full podcast episode interview",
     "barbara corcoran full podcast episode",
     "kevin o'leary full length interview podcast",
     "daymond john full podcast interview",
-    "lori greiner full interview podcast episode",
-    "shark tank behind the scenes full interview",
-    "how i built this entrepreneur full episode",
-    "all in podcast full episode business"
+    "how i built this entrepreneur full episode"
   ],
   discovery_channels: [
+    "UCREgA-BmOocJ9Is_bZV6aJQ",
     "UCnnQ2f4XSGDzLkgBGbecBaA",
     "UCnYMOamNKLGVlJgLtbb2JLA",
     "UC6sS9qHuFKBRKW-bpdgLl_w"

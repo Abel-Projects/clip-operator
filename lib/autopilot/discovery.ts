@@ -98,9 +98,7 @@ function isUsableTitle(title: string): boolean {
   const lower = title.toLowerCase();
   const blocked = [
     "shark tank best moments",
-    "shark tank compilation",
-    "shark tank full episode",
-    "shark tank season",
+    "funny moments",
     "#shorts",
     "#short",
     " youtube shorts",
@@ -109,25 +107,18 @@ function isUsableTitle(title: string): boolean {
     "reel",
     "shorts:",
     " | shorts",
-    "best moments",
-    "funny moments",
     "top 10",
     "top 5",
-    "compilation",
-    "highlights",
     "highlight reel",
     "clip compilation",
-    "best pitches",
-    "worst pitches",
     "rejected pitches",
     "shark tank clips",
-    "vertical video"
+    "vertical video",
+    "one pitch from every episode"
   ];
   if (blocked.some((phrase) => lower.includes(phrase))) {
     return false;
   }
-  // Already-short clickbait titles are usually under ~70 chars and end with a hook.
-  // Prefer episode/podcast-style titles over pre-cut social clips.
   return true;
 }
 
