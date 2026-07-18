@@ -17,6 +17,20 @@ type ConfigStatus = {
   baseUrl: string;
 };
 
+function isBrokenEmbedHost(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".local") ||
+      host.endsWith("trycloudflare.com")
+    );
+  } catch {
+    return true;
+  }
+}
+
 export default function SupoClipEmbed() {
   const [siteUnlocked, setSiteUnlocked] = useState(false);
   const [sitePassword, setSitePassword] = useState("");
@@ -92,53 +106,53 @@ export default function SupoClipEmbed() {
     );
   }
 
-  const frontendUrl = status?.frontendUrl ?? "http://localhost:3107";
-  const canEmbed = Boolean(status?.canEmbed);
-  const backendReachable = Boolean(status?.backendReachable);
-  const looksLocal =
-    frontendUrl.includes("localhost") || frontendUrl.includes("127.0.0.1");
+  const frontendUrl = status?.frontendUrl ?? "";
+  const brokenHost = !frontendUrl || isBrokenEmbedHost(frontendUrl);
+  const canEmbed = Boolean(status?.canEmbed) && !brokenHost;
+  const tailscaleUi =
+    process.env.NEXT_PUBLIC_SUPOCLIP_TAILSCALE_URL?.trim() ||
+    "http://home-server.tailf72f6f.ts.net:3107";
 
   return (
     <SiteShell subtitle="SupoClip editor" back wide>
       <section className="opus-embed-panel">
         <p className="opus-hint">
-          Full SupoClip editor on your home server. Autopilot clipping uses the
-          outbound clip worker — this page is just the visual editor.
+          SupoClip editor runs on the home server. Autopilot clipping does not need
+          this page — the outbound clip worker handles that.
         </p>
         {loadError ? (
           <div className="opus-alert" role="alert">
             {loadError}
           </div>
         ) : null}
+
         {!canEmbed ? (
-          <div className="opus-alert" role="alert">
-            Set <code>SUPOCLIP_FRONTEND_URL</code> and <code>SUPOCLIP_USER_ID</code> on
-            Vercel to load the editor.
+          <div className="opus-alert" role="status">
+            <p>
+              The production app can&apos;t embed <code>localhost</code> or expired
+              Cloudflare tunnels.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              Open the editor directly (requires Tailscale on this device):
+            </p>
+            <p style={{ marginTop: "0.5rem" }}>
+              <a className="opus-textlink" href={tailscaleUi} target="_blank" rel="noreferrer">
+                {tailscaleUi}
+              </a>
+            </p>
+            <p className="opus-hint" style={{ marginTop: "0.75rem" }}>
+              Or run <code>deploy/start-dev.ps1</code> and use{" "}
+              <code>http://localhost:3000/supoclip</code> /{" "}
+              <code>http://localhost:3107</code>.
+            </p>
           </div>
         ) : (
           <>
-            {!backendReachable ? (
+            {!status?.backendReachable ? (
               <div className="opus-alert" role="alert">
-                SupoClip API isn&apos;t reachable from this app host (
+                SupoClip API isn&apos;t reachable from Vercel (
                 <code>{status?.baseUrl}</code>). Autopilot can still clip via the
-                home-server worker. For the editor iframe, use local tunnel (
-                <code>deploy/start-dev.ps1</code>) or open{" "}
-                <a className="opus-textlink" href={frontendUrl} target="_blank" rel="noreferrer">
-                  {frontendUrl}
-                </a>{" "}
-                directly on Tailscale.
-              </div>
-            ) : null}
-            {looksLocal ? (
-              <div className="opus-alert" role="alert">
-                Editor URL is <code>localhost</code>. From the production site that
-                iframe can&apos;t reach your PC — run{" "}
-                <code>deploy/start-dev.ps1</code> and open{" "}
-                <code>http://localhost:3000/supoclip</code>, or open{" "}
-                <a className="opus-textlink" href={frontendUrl} target="_blank" rel="noreferrer">
-                  {frontendUrl}
-                </a>{" "}
-                on the home server / Tailscale.
+                home-server worker.
               </div>
             ) : null}
             <iframe

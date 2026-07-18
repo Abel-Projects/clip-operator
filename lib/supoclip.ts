@@ -296,16 +296,35 @@ async function createSupoClipTask(
   }
 }
 
+function isPublicEmbedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".local")) {
+      return false;
+    }
+    // Expired Cloudflare quick tunnels are not a stable embed target.
+    if (host.endsWith("trycloudflare.com")) {
+      return false;
+    }
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 export function getSupoClipStatus(): SupoClipIntegrationStatus {
   const config = getConfig();
   const hasEnv = Boolean(config);
+  const frontendUrl = config?.frontendUrl ?? DEFAULT_FRONTEND_URL;
+  const canEmbed = hasEnv && isPublicEmbedUrl(frontendUrl);
 
   return {
     configured: hasEnv,
-    canEmbed: hasEnv,
+    canEmbed,
     backendReachable: false,
     baseUrl: config?.baseUrl ?? DEFAULT_BASE_URL,
-    frontendUrl: config?.frontendUrl ?? DEFAULT_FRONTEND_URL,
+    frontendUrl,
     hasTikTokAccount: false
   };
 }

@@ -185,10 +185,11 @@ async function processSchedulingCampaign(
     settings
   });
 
-  const { count: priorPosted = 0 } = await supabase
+  const { count: priorPostedCount } = await supabase
     .from("scheduled_posts")
     .select("*", { count: "exact", head: true })
     .eq("status", "posted");
+  const priorPosted = priorPostedCount ?? 0;
 
   const posts = await Promise.all(
     clips.map(async (clip, index) => {
