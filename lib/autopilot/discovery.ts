@@ -102,11 +102,32 @@ function isUsableTitle(title: string): boolean {
     "shark tank full episode",
     "shark tank season",
     "#shorts",
-    " youtube shorts"
+    "#short",
+    " youtube shorts",
+    "youtube short",
+    "tiktok",
+    "reel",
+    "shorts:",
+    " | shorts",
+    "best moments",
+    "funny moments",
+    "top 10",
+    "top 5",
+    "compilation",
+    "highlights",
+    "highlight reel",
+    "clip compilation",
+    "best pitches",
+    "worst pitches",
+    "rejected pitches",
+    "shark tank clips",
+    "vertical video"
   ];
   if (blocked.some((phrase) => lower.includes(phrase))) {
     return false;
   }
+  // Already-short clickbait titles are usually under ~70 chars and end with a hook.
+  // Prefer episode/podcast-style titles over pre-cut social clips.
   return true;
 }
 
@@ -233,10 +254,15 @@ export async function discoverCandidates(
   for (const channelId of parseChannelList(settings)) {
     candidateIds.push(...(await latestFromChannel(apiKey, channelId, 30)));
   }
+
+  // YouTube search buckets: medium = 4–20 min, long = 20+ min.
+  // When we want long-form episodes, skip "medium" entirely.
+  const preferLongOnly = minDurationSec >= 20 * 60;
   for (const keyword of parseKeywordList(settings)) {
-    // medium = 4–20 min, long = 20+ min — we narrow to 15–30 min after fetching details.
-    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 10, "medium")));
-    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 10, "long")));
+    if (!preferLongOnly) {
+      candidateIds.push(...(await searchByKeyword(apiKey, keyword, 10, "medium")));
+    }
+    candidateIds.push(...(await searchByKeyword(apiKey, keyword, 15, "long")));
   }
 
   const uniqueIds = [...new Set(candidateIds)];

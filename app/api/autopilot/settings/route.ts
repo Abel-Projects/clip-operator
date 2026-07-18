@@ -50,7 +50,7 @@ export async function PATCH(req: Request) {
   const patch: Record<string, unknown> = {};
 
   if (typeof body.max_clips_per_source === "number") {
-    patch.max_clips_per_source = Math.min(8, Math.max(1, body.max_clips_per_source));
+    patch.max_clips_per_source = Math.min(10, Math.max(3, body.max_clips_per_source));
   }
   if (typeof body.posts_per_day === "number") {
     patch.posts_per_day = Math.min(96, Math.max(1, body.posts_per_day));
