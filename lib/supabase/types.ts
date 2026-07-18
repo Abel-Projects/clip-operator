@@ -18,6 +18,7 @@ export type AutopilotSettingsRow = {
   posts_per_day: number;
   min_hours_between_posts: number;
   min_clip_score: number;
+  winner_min_views: number;
   timezone: string;
   enabled: boolean;
   sources_per_day: number;

@@ -74,6 +74,9 @@ export async function PATCH(req: Request) {
   if (typeof body.min_clip_score === "number") {
     patch.min_clip_score = Math.max(0, body.min_clip_score);
   }
+  if (typeof body.winner_min_views === "number") {
+    patch.winner_min_views = Math.min(1_000_000, Math.max(0, Math.floor(body.winner_min_views)));
+  }
   if (typeof body.niche === "string") patch.niche = body.niche.trim();
   if (body.clip_provider === "wayinvideo" || body.clip_provider === "supoclip") {
     patch.clip_provider = body.clip_provider;

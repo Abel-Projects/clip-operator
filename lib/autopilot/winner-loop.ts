@@ -4,7 +4,8 @@ import type { AutopilotSettingsRow } from "@/lib/supabase/types";
 
 const YOUTUBE_API = "https://www.googleapis.com/youtube/v3";
 const MIN_POSTS_FOR_VIEWS = 1;
-const WINNER_AVG_VIEWS = 1500;
+/** Fallback when settings.winner_min_views is missing — early-account floor. */
+const DEFAULT_WINNER_MIN_VIEWS = 100;
 const MAX_WINNERS = 5;
 const SIMILARS_PER_WINNER = 4;
 const AUTO_QUEUE_FROM_WINNERS = 2;
@@ -150,9 +151,16 @@ async function fetchDetails(
 /**
  * Rank sources that are working — prefer real TikTok views when present,
  * otherwise fall back to high SupoClip clip scores from finished campaigns.
+ *
+ * View winners are the current top performers above `minViews` (tunable),
+ * not a fixed viral bar — raise the floor as the account grows.
  */
-export async function findWinnerSources(limit = MAX_WINNERS): Promise<WinnerSource[]> {
+export async function findWinnerSources(
+  limit = MAX_WINNERS,
+  minViews = DEFAULT_WINNER_MIN_VIEWS
+): Promise<WinnerSource[]> {
   const supabase = getSupabaseAdmin();
+  const floor = Math.max(0, minViews);
 
   const { data: posts } = await supabase
     .from("scheduled_posts")
@@ -205,7 +213,7 @@ export async function findWinnerSources(limit = MAX_WINNERS): Promise<WinnerSour
   for (const agg of bySource.values()) {
     if (agg.views.length >= MIN_POSTS_FOR_VIEWS) {
       const avgViews = agg.views.reduce((a, b) => a + b, 0) / agg.views.length;
-      if (avgViews >= WINNER_AVG_VIEWS) {
+      if (avgViews >= floor) {
         withViews.push({
           sourceUrl: agg.sourceUrl,
           title: agg.title,
@@ -235,11 +243,11 @@ export async function findWinnerSources(limit = MAX_WINNERS): Promise<WinnerSour
     }
   }
 
+  // Relative ranking: best of what you have right now above the floor.
   withViews.sort((a, b) => (b.avgViews ?? 0) - (a.avgViews ?? 0));
   withScores.sort((a, b) => (b.avgClipScore ?? 0) - (a.avgClipScore ?? 0));
 
-  // Prefer real view winners; fill with clip-score winners until metrics exist.
-  const merged = [...withViews];
+  const merged = withViews.slice(0, limit);
   for (const candidate of withScores) {
     if (merged.some((w) => w.sourceUrl === candidate.sourceUrl)) continue;
     merged.push(candidate);
@@ -268,7 +276,10 @@ export async function reinforceWinners(
     return { winners: 0, suggestionsAdded: 0, campaignsQueued: 0, usedProxyScores: false };
   }
 
-  const winners = await findWinnerSources();
+  const winners = await findWinnerSources(
+    MAX_WINNERS,
+    settings.winner_min_views ?? DEFAULT_WINNER_MIN_VIEWS
+  );
   if (winners.length === 0) {
     return { winners: 0, suggestionsAdded: 0, campaignsQueued: 0, usedProxyScores: false };
   }

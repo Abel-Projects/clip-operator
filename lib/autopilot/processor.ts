@@ -496,7 +496,9 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
     try {
       const reinforced = await reinforceWinners(settings);
       if (reinforced.winners > 0) {
-        const proxy = reinforced.usedProxyScores ? " (using clip scores until TikTok views sync)" : "";
+        const proxy = reinforced.usedProxyScores
+          ? " (clip-score proxy; no view winners above floor yet)"
+          : "";
         actions.push(
           `Growth: doubled down on ${reinforced.winners} winner(s)${proxy} → ${reinforced.suggestionsAdded} similar + ${reinforced.campaignsQueued} queued`
         );

@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   posts_per_day: 48,
   min_hours_between_posts: 0.5,
   min_clip_score: 50,
+  winner_min_views: 100,
   timezone: "America/New_York",
   enabled: true,
   sources_per_day: 6,
