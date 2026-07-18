@@ -320,13 +320,14 @@ export async function getSupoClipIntegrationStatus(): Promise<SupoClipIntegratio
 
   try {
     const response = await fetch(`${config.baseUrl}/health`, {
-      headers: authHeaders(config)
+      headers: authHeaders(config),
+      // Vercel must not hang on an unreachable home-server URL (causes 500s).
+      signal: AbortSignal.timeout(2500)
     });
 
     if (!response.ok) {
       return {
         ...status,
-        configured: false,
         backendReachable: false
       };
     }
@@ -338,7 +339,6 @@ export async function getSupoClipIntegrationStatus(): Promise<SupoClipIntegratio
   } catch {
     return {
       ...status,
-      configured: false,
       backendReachable: false
     };
   }
