@@ -2,15 +2,16 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { AutopilotSettingsRow, ScheduledPostRow } from "@/lib/supabase/types";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
+const MS_PER_MINUTE = 60 * 1000;
+
+/** US entrepreneur TikTok peak hours in the account timezone. */
+const PEAK_HOURS_LOCAL = new Set([7, 8, 9, 11, 12, 18, 19, 20, 21, 22]);
 
 function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-function countPostsOnUtcDay(
-  timestamps: Date[],
-  day: Date
-): number {
+function countPostsOnUtcDay(timestamps: Date[], day: Date): number {
   const start = startOfUtcDay(day).getTime();
   const end = start + 24 * MS_PER_HOUR;
 
@@ -18,6 +19,37 @@ function countPostsOnUtcDay(
     const t = ts.getTime();
     return t >= start && t < end;
   }).length;
+}
+
+function hourInTimeZone(date: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    hour12: false
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  return hour === 24 ? 0 : hour;
+}
+
+function isPeakLocalHour(date: Date, timeZone: string): boolean {
+  return PEAK_HOURS_LOCAL.has(hourInTimeZone(date, timeZone));
+}
+
+/** Snap forward to the next peak window while preserving min gap. */
+function snapToPeakHour(from: Date, timeZone: string): Date {
+  if (isPeakLocalHour(from, timeZone)) {
+    return from;
+  }
+
+  let cursor = new Date(from);
+  for (let step = 0; step < 24 * 12; step += 1) {
+    cursor = new Date(cursor.getTime() + 5 * MS_PER_MINUTE);
+    if (isPeakLocalHour(cursor, timeZone)) {
+      return cursor;
+    }
+  }
+
+  return from;
 }
 
 export async function computeNextPostSlots(input: {
@@ -28,6 +60,7 @@ export async function computeNextPostSlots(input: {
   const supabase = getSupabaseAdmin();
   const minGapMs = input.settings.min_hours_between_posts * MS_PER_HOUR;
   const maxPerDay = Math.max(1, input.settings.posts_per_day);
+  const timeZone = input.settings.timezone?.trim() || "America/New_York";
 
   const { data: existing, error } = await supabase
     .from("scheduled_posts")
@@ -62,6 +95,7 @@ export async function computeNextPostSlots(input: {
     cursor = new Date(Math.max(cursor.getTime(), last.getTime() + minGapMs));
   }
 
+  cursor = snapToPeakHour(cursor, timeZone);
   const allScheduled = [...occupied];
 
   while (slots.length < input.count) {
@@ -69,7 +103,10 @@ export async function computeNextPostSlots(input: {
     if (dayCount >= maxPerDay) {
       const nextDay = startOfUtcDay(cursor);
       nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-      cursor = new Date(Math.max(nextDay.getTime(), cursor.getTime()));
+      cursor = snapToPeakHour(
+        new Date(Math.max(nextDay.getTime(), cursor.getTime())),
+        timeZone
+      );
       continue;
     }
 
@@ -77,15 +114,20 @@ export async function computeNextPostSlots(input: {
       const last = allScheduled[allScheduled.length - 1];
       const minNext = last.getTime() + minGapMs;
       if (cursor.getTime() < minNext) {
-        cursor = new Date(minNext);
+        cursor = snapToPeakHour(new Date(minNext), timeZone);
         continue;
       }
+    }
+
+    if (!isPeakLocalHour(cursor, timeZone)) {
+      cursor = snapToPeakHour(cursor, timeZone);
+      continue;
     }
 
     const slot = new Date(cursor);
     slots.push(slot);
     allScheduled.push(slot);
-    cursor = new Date(slot.getTime() + minGapMs);
+    cursor = snapToPeakHour(new Date(slot.getTime() + minGapMs), timeZone);
   }
 
   return slots;

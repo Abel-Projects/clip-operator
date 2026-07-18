@@ -1,5 +1,6 @@
 import { buildAutopilotCaption, generateAutopilotCaption } from "@/lib/autopilot/captions";
 import { cleanupStaleFailedRecords } from "@/lib/autopilot/cleanup";
+import { selectGrowthClips } from "@/lib/autopilot/clip-quality";
 import {
   countCampaignsCreatedToday,
   discoverCandidates,
@@ -7,13 +8,14 @@ import {
   recordSuggestions
 } from "@/lib/autopilot/discovery";
 import { recoverStalePostingJobs } from "@/lib/autopilot/publish-agent";
-import { getClipProvider, type ProviderClip } from "@/lib/autopilot/providers";
+import { getClipProvider } from "@/lib/autopilot/providers";
 import { getAutopilotSettings } from "@/lib/autopilot/settings";
 import {
   canPostNow,
   computeNextPostSlots,
   getDueScheduledPosts
 } from "@/lib/autopilot/scheduler";
+import { pruneLoserSources } from "@/lib/autopilot/source-performance";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { AutopilotSettingsRow, CampaignRow } from "@/lib/supabase/types";
 
@@ -24,18 +26,6 @@ export type AutopilotTickResult = {
   actions: string[];
   error?: string;
 };
-
-function rankClips(clips: ProviderClip[]): ProviderClip[] {
-  return [...clips].sort((a, b) => {
-    const scoreA = a.score ?? -1;
-    const scoreB = b.score ?? -1;
-    if (scoreB !== scoreA) {
-      return scoreB - scoreA;
-    }
-
-    return (b.durationSec ?? 0) - (a.durationSec ?? 0);
-  });
-}
 
 function providerLabel(campaign: CampaignRow): string {
   return campaign.clip_provider === "supoclip" ? "SupoClip" : "WayinVideo";
@@ -126,14 +116,11 @@ async function processClippingCampaign(
   }
 
   const settings = await getAutopilotSettings();
-  const ranked = rankClips(clipsResult.clips).filter(
-    (clip) => (clip.score ?? 100) >= settings.min_clip_score
-  );
-  const selected = ranked.slice(0, settings.max_clips_per_source);
+  const selected = selectGrowthClips(clipsResult.clips, settings);
 
   if (selected.length === 0) {
-    await failCampaign(campaign.id, "No clips passed the minimum score threshold.");
-    actions.push(`Campaign ${campaign.id}: no clips met score threshold`);
+    await failCampaign(campaign.id, "No clips passed the growth quality filters (score + duration).");
+    actions.push(`Campaign ${campaign.id}: no clips met growth quality filters`);
     return;
   }
 
@@ -198,11 +185,17 @@ async function processSchedulingCampaign(
     settings
   });
 
+  const { count: priorPosted = 0 } = await supabase
+    .from("scheduled_posts")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "posted");
+
   const posts = await Promise.all(
     clips.map(async (clip, index) => {
       const caption = await generateAutopilotCaption({
         transcript: clip.title ?? "",
-        niche: settings.niche
+        niche: settings.niche,
+        includeCta: (priorPosted + index) % 5 === 4
       });
 
       return {
@@ -484,6 +477,17 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
     } catch (error) {
       actions.push(
         `Cleanup skipped: ${error instanceof Error ? error.message : "unknown error"}`
+      );
+    }
+
+    try {
+      const pruned = await pruneLoserSources();
+      if (pruned > 0) {
+        actions.push(`Growth: blocked ${pruned} low-performing source(s) from rediscovery`);
+      }
+    } catch (error) {
+      actions.push(
+        `Source prune skipped: ${error instanceof Error ? error.message : "unknown error"}`
       );
     }
 

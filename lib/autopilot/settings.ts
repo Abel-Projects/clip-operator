@@ -5,13 +5,13 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   id: 1,
   niche: "shark_tank_entrepreneurs",
   clip_provider: "supoclip",
-  max_clips_per_source: 10,
-  posts_per_day: 288,
-  min_hours_between_posts: 1 / 12,
-  min_clip_score: 0,
+  max_clips_per_source: 8,
+  posts_per_day: 48,
+  min_hours_between_posts: 0.5,
+  min_clip_score: 50,
   timezone: "America/New_York",
   enabled: true,
-  sources_per_day: 12,
+  sources_per_day: 6,
   min_source_duration_min: 30,
   max_source_duration_min: 120,
   auto_approve_sources: true,
@@ -22,7 +22,8 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
     "daymond john full podcast interview",
     "lori greiner full interview podcast episode",
     "shark tank behind the scenes full interview",
-    "entrepreneur full podcast episode long form"
+    "how i built this entrepreneur full episode",
+    "all in podcast full episode business"
   ],
   discovery_channels: [
     "UCnnQ2f4XSGDzLkgBGbecBaA",

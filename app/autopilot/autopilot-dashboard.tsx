@@ -590,7 +590,7 @@ export default function AutopilotDashboard() {
             </div>
             <p className="opus-suggest-empty-title">No recommendations yet</p>
             <p className="opus-hint">
-              Discovery runs every few minutes and looks for 15–30 minute interviews. Check back
+              Discovery runs every few minutes and looks for 30–120 minute episodes. Check back
               shortly, or paste a YouTube link above.
             </p>
           </div>

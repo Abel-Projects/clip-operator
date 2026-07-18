@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getAutopilotSettings } from "@/lib/autopilot/settings";
+import { selectGrowthClips } from "@/lib/autopilot/clip-quality";
 import type { CampaignRow } from "@/lib/supabase/types";
 
 const STALE_CLAIM_MS = 12 * 60 * 1000;
@@ -214,25 +215,14 @@ export async function completeClipJob(
   }
 
   // clips_ready
-  const ranked = [...input.clips].sort((a, b) => {
-    const scoreA = a.score ?? -1;
-    const scoreB = b.score ?? -1;
-    if (scoreB !== scoreA) {
-      return scoreB - scoreA;
-    }
-    return (b.durationSec ?? 0) - (a.durationSec ?? 0);
-  });
-
-  const selected = ranked
-    .filter((clip) => (clip.score ?? 100) >= settings.min_clip_score)
-    .slice(0, settings.max_clips_per_source);
+  const selected = selectGrowthClips(input.clips, settings);
 
   if (selected.length === 0) {
     await supabase
       .from("campaigns")
       .update({
         status: "failed",
-        error_message: "No clips passed the minimum score threshold."
+        error_message: "No clips passed the growth quality filters (score + duration)."
       })
       .eq("id", campaignId);
     return;
