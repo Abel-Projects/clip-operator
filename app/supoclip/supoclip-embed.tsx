@@ -127,41 +127,35 @@ export default function SupoClipEmbed() {
         ) : null}
 
         {!canEmbed ? (
-          <div className="opus-alert" role="status">
-            <p>
-              The production app can&apos;t embed <code>localhost</code> or expired
-              Cloudflare tunnels.
+          <div className="opus-panel" role="status">
+            <h2 style={{ margin: 0, fontSize: "1.15rem" }}>Open SupoClip on the home server</h2>
+            <p className="opus-hint" style={{ marginTop: "0.5rem" }}>
+              Vercel can&apos;t iframe a private Tailscale URL. Autopilot still clips without
+              this page — use this only when you want the manual editor.
             </p>
-            <p style={{ marginTop: "0.75rem" }}>
-              Open the editor directly (requires Tailscale on this device):
+            <p style={{ marginTop: "1rem" }}>
+              <a className="opus-secondary" href={tailscaleUi} target="_blank" rel="noreferrer">
+                Open SupoClip editor
+              </a>
             </p>
-            <p style={{ marginTop: "0.5rem" }}>
+            <p className="opus-hint" style={{ marginTop: "0.75rem" }}>
+              Needs Tailscale on this device →{" "}
               <a className="opus-textlink" href={tailscaleUi} target="_blank" rel="noreferrer">
                 {tailscaleUi}
               </a>
             </p>
-            <p className="opus-hint" style={{ marginTop: "0.75rem" }}>
-              Or run <code>deploy/start-dev.ps1</code> and use{" "}
-              <code>http://localhost:3000/supoclip</code> /{" "}
+            <p className="opus-hint" style={{ marginTop: "0.5rem" }}>
+              Local alternative: <code>deploy/start-dev.ps1</code>, then{" "}
               <code>http://localhost:3107</code>.
             </p>
           </div>
         ) : (
-          <>
-            {!status?.backendReachable ? (
-              <div className="opus-alert" role="alert">
-                SupoClip API isn&apos;t reachable from Vercel (
-                <code>{status?.baseUrl}</code>). Autopilot can still clip via the
-                home-server worker.
-              </div>
-            ) : null}
-            <iframe
-              className="opus-embed-frame"
-              src={`${frontendUrl}${frontendUrl.includes("?") ? "&" : "?"}embed=1`}
-              title="SupoClip"
-              allow="clipboard-read; clipboard-write"
-            />
-          </>
+          <iframe
+            className="opus-embed-frame"
+            src={`${frontendUrl}${frontendUrl.includes("?") ? "&" : "?"}embed=1`}
+            title="SupoClip"
+            allow="clipboard-read; clipboard-write"
+          />
         )}
       </section>
     </SiteShell>
