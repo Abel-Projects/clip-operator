@@ -3,17 +3,21 @@
 Posts queued SupoClip clips to TikTok. Runs on the **24/7 home server** and polls **Vercel**
 for jobs — the app does not upload to TikTok itself for SupoClip campaigns.
 
+A companion **clip worker** (`clip-agent.py`) also polls Vercel for pending/clipping campaigns
+and talks to local SupoClip — so Vercel never needs inbound access to the home server.
+
 ## Architecture
 
 ```
 Vercel (clip-operator.vercel.app)     Home server (24/7)
 ─────────────────────────────────     ─────────────────────────
-Autopilot cron → queue posts    ←──   publisher polls every 5 min
-Calls SupoClip via Tailscale    ──→   SupoClip :8000 (local)
+Autopilot cron → queue campaigns  ←── clip worker polls every 5 min
+Autopilot cron → queue posts      ←── publisher polls every 5 min
+                                      SupoClip :8000 (local)
                                       TikTokAutoUploader → TikTok
 ```
 
-No Cloudflare tunnels. Vercel reaches SupoClip via **Tailscale Funnel** (`https://*.ts.net`).
+No Cloudflare tunnels required for clipping or posting.
 
 ## Quick install
 

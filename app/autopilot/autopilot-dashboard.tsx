@@ -53,6 +53,8 @@ type Settings = {
 type Health = {
   clipProvider: string;
   supoclipReachable: boolean;
+  clipWorkerLastSeenAt: string | null;
+  clipWorkerOnline: boolean;
   publisherLastSeenAt: string | null;
   publisherOnline: boolean;
 };
@@ -368,7 +370,14 @@ export default function AutopilotDashboard() {
       {homeServerDown ? (
         <div className="opus-alert" role="alert">
           Home server offline —{" "}
-          {!clipHealthy ? "SupoClip isn't reachable" : null}
+          {!clipHealthy ? (
+            <>
+              the clip worker hasn&apos;t checked in
+              {health?.clipWorkerLastSeenAt
+                ? ` (last seen ${formatRelative(health.clipWorkerLastSeenAt)})`
+                : ""}
+            </>
+          ) : null}
           {!clipHealthy && !postHealthy ? " and " : null}
           {!postHealthy ? (
             <>
@@ -391,6 +400,9 @@ export default function AutopilotDashboard() {
             {queued} queued{nextPost ? ` · next ${nextPost}` : ""}
             {isSupoclip ? (
               <>
+                {" · "}
+                <span className={`opus-health-dot ${clipHealthy ? "on" : "off"}`} />{" "}
+                clips {clipHealthy ? "online" : "offline"}
                 {" · "}
                 <span className={`opus-health-dot ${postHealthy ? "on" : "off"}`} />{" "}
                 publisher {postHealthy ? "online" : "offline"}

@@ -4,9 +4,9 @@
 #   powershell -ExecutionPolicy Bypass -File deploy/install-windows-home-server.ps1
 #
 # After install:
-#   1. Run deploy/tailscale-supoclip.ps1 (or tailscale funnel --bg 8000) for Vercel -> SupoClip
-#   2. Set SUPOCLIP_BASE_URL / SUPOCLIP_FRONTEND_URL on Vercel to the Tailscale funnel URLs
-#   3. Confirm cron-job.org hits https://clip-operator.vercel.app/api/cron/autopilot
+#   1. Clip worker + publisher poll Vercel outbound (no Tailscale Funnel required)
+#   2. Confirm cron-job.org hits https://clip-operator.vercel.app/api/cron/autopilot
+#   3. Optional: Tailscale Funnel only if you want the SupoClip UI embedded from Vercel
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -75,22 +75,18 @@ if (-not $accountName) {
 }
 Pop-Location
 
-# --- 4. Scheduled publisher task ---
-Write-Host "`n[3/3] Registering publisher (every 5 min)..." -ForegroundColor Cyan
+# --- 4. Scheduled publisher + clip worker ---
+Write-Host "`n[3/3] Registering publisher + clip worker (every 5 min)..." -ForegroundColor Cyan
 Push-Location $publisherDir
 & .\sync-env.ps1
 & .\install-scheduled-task.ps1
+& .\install-clip-scheduled-task.ps1
 Pop-Location
 
 Write-Host ""
 Write-Host "=== Home server ready ===" -ForegroundColor Green
-Write-Host "SupoClip:   http://localhost:3107"
-Write-Host "Publisher:  polls https://clip-operator.vercel.app every 5 min"
-Write-Host ""
-Write-Host "Next - expose SupoClip to Vercel (no Cloudflare):" -ForegroundColor Yellow
-Write-Host "  tailscale funnel --bg 8000"
-Write-Host "  tailscale funnel --bg 3107"
-Write-Host "Copy the https://*.ts.net URLs into Vercel env:"
-Write-Host "  SUPOCLIP_BASE_URL, SUPOCLIP_FRONTEND_URL"
+Write-Host "SupoClip:    http://localhost:3107"
+Write-Host "Clip worker: polls Vercel for pending/clipping campaigns"
+Write-Host "Publisher:   polls Vercel for due TikTok posts"
 Write-Host ""
 Write-Host "Dashboard: https://clip-operator.vercel.app" -ForegroundColor Cyan

@@ -10,14 +10,14 @@ alwaysApply: true
 | Host | Role |
 |------|------|
 | **Vercel** | Next.js app + dashboard (`https://clip-operator.vercel.app`) |
-| **Home server** | SupoClip + TikTok publisher, 24/7 |
+| **Home server** | SupoClip + clip worker + TikTok publisher, 24/7 |
 | **This machine** | Development only |
 
 ## Before changing production infra
 
 1. Read `deploy/HOME-SERVER.md` and `deploy/home-server.env` (if present).
 2. Use `deploy/remote.ps1` / `deploy/remote.sh` for SSH — do not run `install-windows-home-server.ps1` on a dev PC.
-3. Do not use Cloudflare quick tunnels (`trycloudflare.com`).
+3. Do not use Cloudflare quick tunnels (`trycloudflare.com`). Clipping/posting use **outbound** home-server agents that poll Vercel — Tailscale Funnel is optional (UI embed only).
 
 ## Connection (local Cursor)
 
@@ -27,9 +27,13 @@ SSH over Tailscale — see `deploy/ssh-config.example` and `deploy/home-server.e
 
 Cloud agents cannot reach private Tailscale IPs. Deploy via **git push → GitHub Actions self-hosted runner** on the home server (`.github/workflows/deploy-home-server.yml`).
 
-## Publisher
+## Publisher + clip worker
 
-Home server publisher polls **Vercel** (`CLIP_OPERATOR_URL=https://clip-operator.vercel.app`), not localhost. Heartbeats land in Supabase — both Vercel and local dev read the same status.
+Home server agents poll **Vercel** (`CLIP_OPERATOR_URL=https://clip-operator.vercel.app`), not localhost:
+- **clip worker** — starts/polls SupoClip for pending campaigns
+- **publisher** — uploads due TikTok posts
+
+Heartbeats land in Supabase — both Vercel and local dev read the same status.
 
 ## Local dev on this PC (localhost:3000)
 

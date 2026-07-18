@@ -8,20 +8,20 @@ only what must stay on 24/7 hardware: **SupoClip** (clip engine) and the **TikTo
                     Vercel (clip-operator.vercel.app)
                     ─────────────────────────────────
 YouTube discovery ─▶ autopilot cron ─▶ queue in Supabase
+                           ▲
+                           │  outbound poll (clip worker + publisher)
                            │
-                           │  SUPOCLIP_BASE_URL (Tailscale Funnel)
-                           ▼
 Home server (24/7)         SupoClip :8000 / :3107
-                           │
-                           │  publisher polls Vercel
-                           ▼
-                           TikTok
+                           TikTok uploads
 ```
+
+Home-server agents **pull** work from Vercel. No Tailscale Funnel / Cloudflare tunnel is
+required for clipping or posting.
 
 ## Why not Cloudflare?
 
-`trycloudflare.com` quick tunnels expire when the process stops. Use **Tailscale Funnel**
-instead — stable `https://*.ts.net` URLs tied to your home server.
+`trycloudflare.com` quick tunnels expire when the process stops. The outbound worker
+pattern avoids inbound tunnels entirely.
 
 ## One-shot install (Windows home server)
 
@@ -30,11 +30,12 @@ powershell -ExecutionPolicy Bypass -File deploy/install-windows-home-server.ps1
 ```
 
 This starts SupoClip, sets up [TikTokAutoUploader](https://github.com/makiisthenes/TiktokAutoUploader),
-and registers a scheduled task that polls Vercel every 5 minutes.
+and registers scheduled tasks that poll Vercel every 5 minutes (clip worker + publisher).
 
-## Connect Vercel to SupoClip (Tailscale Funnel)
+## Optional: embed SupoClip UI from Vercel (Tailscale Funnel)
 
-On the home server, after SupoClip is running:
+Only needed if you want the dashboard to iframe the SupoClip editor. Clipping itself
+does **not** need this.
 
 ```powershell
 tailscale funnel --bg 8000    # backend API  → SUPOCLIP_BASE_URL
@@ -43,16 +44,14 @@ tailscale funnel --bg 3107    # frontend UI  → SUPOCLIP_FRONTEND_URL
 
 Copy the printed `https://….ts.net` URLs into **Vercel → Project → Settings → Environment Variables**.
 
-Redeploy Vercel after changing env vars.
-
 ## Vercel environment variables
 
 | Variable | Value |
 |----------|-------|
-| `SUPOCLIP_BASE_URL` | Tailscale funnel URL for port **8000** |
-| `SUPOCLIP_FRONTEND_URL` | Tailscale funnel URL for port **3107** |
 | `SUPOCLIP_USER_ID` | Same as home server |
-| `SUPOCLIP_AUTH_SECRET` | Same as home server |
+| `SUPOCLIP_AUTH_SECRET` | Same as home server `BACKEND_AUTH_SECRET` (local/dev + publisher) |
+| `SUPOCLIP_BASE_URL` | Optional — only for Funnel/UI; clip worker uses localhost on home server |
+| `SUPOCLIP_FRONTEND_URL` | Optional — only for Funnel/UI |
 | `CRON_SECRET` | Same as home server publisher |
 | `SUPABASE_*`, `YOUTUBE_API_KEY`, `APP_PASSWORD` | As in `.env.example` |
 

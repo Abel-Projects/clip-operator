@@ -28,28 +28,39 @@ async function getHeartbeat(name: string): Promise<string | null> {
   return data?.last_seen_at ?? null;
 }
 
+function isOnline(lastSeenAt: string | null): boolean {
+  return lastSeenAt
+    ? Date.now() - new Date(lastSeenAt).getTime() < HEARTBEAT_ONLINE_MS
+    : false;
+}
+
 export type HomeServerHealth = {
   clipProvider: string;
-  /** Only meaningful for the SupoClip pipeline. */
+  /** True when the home-server clip worker (or direct SupoClip) is reachable. */
   supoclipReachable: boolean;
+  clipWorkerLastSeenAt: string | null;
+  clipWorkerOnline: boolean;
   publisherLastSeenAt: string | null;
   publisherOnline: boolean;
 };
 
 export async function getHomeServerHealth(): Promise<HomeServerHealth> {
   const settings = await getAutopilotSettings();
-  const [supoclip, publisherLastSeenAt] = await Promise.all([
+  const [supoclip, clipWorkerLastSeenAt, publisherLastSeenAt] = await Promise.all([
     getSupoClipIntegrationStatus().catch(() => ({ backendReachable: false })),
+    getHeartbeat("clip-worker"),
     getHeartbeat("publisher")
   ]);
 
-  const publisherOnline = publisherLastSeenAt
-    ? Date.now() - new Date(publisherLastSeenAt).getTime() < HEARTBEAT_ONLINE_MS
-    : false;
+  const clipWorkerOnline = isOnline(clipWorkerLastSeenAt);
+  const publisherOnline = isOnline(publisherLastSeenAt);
 
   return {
     clipProvider: settings.clip_provider,
-    supoclipReachable: Boolean(supoclip.backendReachable),
+    // Prefer outbound clip-worker heartbeat; fall back to direct health for local dev.
+    supoclipReachable: clipWorkerOnline || Boolean(supoclip.backendReachable),
+    clipWorkerLastSeenAt,
+    clipWorkerOnline,
     publisherLastSeenAt,
     publisherOnline
   };

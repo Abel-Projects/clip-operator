@@ -23,11 +23,11 @@ Get-Content $envFile | ForEach-Object {
     }
 }
 
-$host = $env:HOME_SERVER_SSH_HOST
-if (-not $host) {
+$sshHost = $env:HOME_SERVER_SSH_HOST
+if (-not $sshHost) {
     Write-Host "HOME_SERVER_SSH_HOST not set in deploy/home-server.env" -ForegroundColor Red
     exit 1
 }
 
-Write-Host "-> clip-home: $Command" -ForegroundColor Cyan
-ssh $host $Command
+Write-Host "-> ${sshHost}: $Command" -ForegroundColor Cyan
+ssh.exe $sshHost $Command

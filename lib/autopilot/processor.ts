@@ -428,9 +428,17 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
       .order("created_at", { ascending: true })
       .limit(1);
 
-    if (pending?.[0]) {
+    // SupoClip pending/clipping is handled by the home-server clip worker
+    // (outbound poll) so Vercel never needs inbound access to SupoClip.
+    if (pending?.[0] && pending[0].clip_provider !== "supoclip") {
       await processPendingCampaign(pending[0], settings, actions);
       return { ok: true, actions };
+    }
+
+    if (pending?.[0]?.clip_provider === "supoclip") {
+      actions.push(
+        `Campaign ${pending[0].id}: waiting for home-server clip worker to start SupoClip`
+      );
     }
 
     const { data: clipping } = await supabase
@@ -440,9 +448,15 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
       .order("created_at", { ascending: true })
       .limit(1);
 
-    if (clipping?.[0]) {
+    if (clipping?.[0] && clipping[0].clip_provider !== "supoclip") {
       await processClippingCampaign(clipping[0], actions);
       return { ok: true, actions };
+    }
+
+    if (clipping?.[0]?.clip_provider === "supoclip") {
+      actions.push(
+        `Campaign ${clipping[0].id}: waiting for home-server clip worker to finish SupoClip`
+      );
     }
 
     const { data: scheduling } = await supabase
