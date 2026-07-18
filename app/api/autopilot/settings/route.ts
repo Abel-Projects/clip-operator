@@ -53,12 +53,13 @@ export async function PATCH(req: Request) {
     patch.max_clips_per_source = Math.min(10, Math.max(3, body.max_clips_per_source));
   }
   if (typeof body.posts_per_day === "number") {
-    patch.posts_per_day = Math.min(96, Math.max(1, body.posts_per_day));
+    patch.posts_per_day = Math.min(288, Math.max(1, body.posts_per_day));
   }
   if (typeof body.min_hours_between_posts === "number") {
+    // Allow as low as 5 minutes (1/12 hour).
     patch.min_hours_between_posts = Math.min(
       12,
-      Math.max(0.25, body.min_hours_between_posts)
+      Math.max(1 / 12, body.min_hours_between_posts)
     );
   }
   if (typeof body.sources_per_day === "number") {
