@@ -1,4 +1,5 @@
-const DEFAULT_HASHTAGS = "#sharktank #entrepreneur #business #startup #money";
+const DEFAULT_HASHTAGS =
+  "#sharktank #entrepreneur #businessadvice #startup #sidehustle";
 const GEMINI_MODEL = "gemini-2.0-flash-lite";
 
 const SERIES_FORMATS = [
@@ -16,24 +17,6 @@ const CTA_LINES = [
   "Follow for more investor breakdowns."
 ];
 
-/** Filler-only lines we never want to use as a hook. */
-const FILLER = new Set([
-  "yeah",
-  "yep",
-  "no",
-  "okay",
-  "ok",
-  "right",
-  "sure",
-  "uh",
-  "um",
-  "so",
-  "well",
-  "i think so",
-  "it",
-  "you know"
-]);
-
 /**
  * SupoClip "titles" are raw transcripts with speaker labels
  * ("Speaker A:", "Speaker 1:", ">>"). Strip that noise so captions read cleanly.
@@ -47,23 +30,12 @@ export function cleanTranscriptText(text: string | null | undefined): string {
     .trim();
 }
 
-/** Pick the first substantive sentence (not filler), else the longest. */
-function pickHook(cleaned: string): string {
-  const sentences = cleaned
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const substantive = sentences.find(
-    (s) => s.length >= 25 && !FILLER.has(s.replace(/[.!?]+$/, "").toLowerCase())
-  );
-
-  const chosen =
-    substantive ??
-    [...sentences].sort((a, b) => b.length - a.length)[0] ??
-    cleaned;
-
-  return chosen.length > 120 ? `${chosen.slice(0, 117).trimEnd()}...` : chosen;
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return hash;
 }
 
 function pickSeriesLabel(transcript: string): string {
@@ -79,19 +51,7 @@ function pickSeriesLabel(transcript: string): string {
   return SERIES_FORMATS[index]!;
 }
 
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 31 + value.charCodeAt(i)) | 0;
-  }
-  return hash;
-}
-
-function withOptionalCta(
-  title: string,
-  includeCta: boolean,
-  seed: string
-): string {
+function withOptionalCta(title: string, includeCta: boolean, seed: string): string {
   if (!includeCta) {
     return title;
   }
@@ -99,29 +59,55 @@ function withOptionalCta(
   return `${title}\n${cta}`;
 }
 
+/**
+ * Use a stored caption as-is (do NOT re-pick a transcript sentence).
+ * Only cleans speaker labels if somehow still present.
+ */
 export function buildAutopilotCaption(input: {
   title?: string | null;
   description?: string | null;
 }): { title: string; description: string } {
-  const cleanedTitle = cleanTranscriptText(input.title);
-  const title = cleanedTitle ? pickHook(cleanedTitle) : "Clip";
+  const title = cleanTranscriptText(input.title) || "Clip";
   const description = cleanTranscriptText(input.description) || DEFAULT_HASHTAGS;
-
   return { title, description };
 }
 
+function moneyOrStakeHint(transcript: string): string | null {
+  const money = transcript.match(/\$[\d,.]+(?:\s*(?:million|k|thousand))?/i)?.[0];
+  if (money) {
+    return money.replace(/\s+/g, "");
+  }
+  const percent = transcript.match(/\b\d{1,3}%\b/)?.[0];
+  return percent ?? null;
+}
+
+/**
+ * Clickbait fallback when Gemini is unavailable — never paste raw transcript.
+ */
 function fallbackTikTokCaption(
   transcript: string,
   niche?: string | null,
   includeCta = false
-): {
-  title: string;
-  description: string;
-} {
+): { title: string; description: string } {
   const cleaned = cleanTranscriptText(transcript);
-  const rawHook = cleaned ? pickHook(cleaned) : "This money lesson hits different.";
-  const series = pickSeriesLabel(cleaned || rawHook);
-  const hook = `${series}: ${rawHook}`;
+  const series = pickSeriesLabel(cleaned);
+  const stake = moneyOrStakeHint(cleaned);
+
+  const templates = [
+    stake
+      ? `${series}: They asked for ${stake}. What happened next is wild.`
+      : `${series}: The Sharks hated this pitch… until one number changed everything.`,
+    stake
+      ? `${series}: ${stake} on the line — and the founder almost walked.`
+      : `${series}: This founder said one sentence that flipped the whole room.`,
+    `${series}: Don't make this mistake if you want a deal.`,
+    `${series}: The offer was insane. Here's why it almost worked.`,
+    stake
+      ? `${series}: ${stake} valuation — and Cuban wasn't buying it.`
+      : `${series}: Watch the Sharks fight over this deal.`
+  ];
+
+  const hook = templates[Math.abs(hashString(cleaned || series)) % templates.length]!;
 
   const nicheTag = niche?.trim().replace(/\s+/g, "").toLowerCase();
   const hashtags = nicheTag
@@ -129,9 +115,23 @@ function fallbackTikTokCaption(
     : DEFAULT_HASHTAGS;
 
   return {
-    title: withOptionalCta(hook, includeCta, cleaned || rawHook),
+    title: withOptionalCta(hook, includeCta, cleaned || series),
     description: hashtags
   };
+}
+
+function looksLikeRawTranscript(hook: string): boolean {
+  const lower = hook.toLowerCase();
+  if (hook.length > 110) return true;
+  if (/^(so|and|well|you know|uh|um|i mean)\b/i.test(hook)) return true;
+  if (/\bspeaker\b/i.test(hook)) return true;
+  // Weak hooks that are clearly mid-conversation
+  if (
+    /^(thank you|thanks|hello|hi everyone|my name is|this is my)\b/i.test(lower)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function parseGeminiCaption(
@@ -149,7 +149,7 @@ function parseGeminiCaption(
     };
 
     const hook = data.hook?.trim();
-    if (!hook) {
+    if (!hook || looksLikeRawTranscript(hook)) {
       return null;
     }
 
@@ -177,7 +177,11 @@ export async function generateAutopilotCaption(input: {
 
   if (!transcript) {
     return {
-      title: withOptionalCta("Shark Tank money lesson.", includeCta, "empty"),
+      title: withOptionalCta(
+        "Shark Tank money lesson: This pitch went sideways fast.",
+        includeCta,
+        "empty"
+      ),
       description: DEFAULT_HASHTAGS
     };
   }
@@ -188,21 +192,26 @@ export async function generateAutopilotCaption(input: {
   }
 
   const series = pickSeriesLabel(transcript);
-  const prompt = `Write a TikTok caption that grows an entrepreneur / Shark Tank clip account.
+  const prompt = `You write viral TikTok captions for a Shark Tank / entrepreneur clip account.
 
-Series style to match (keep account consistent): "${series}"
-Source: ${input.sourceTitle?.trim() || "long-form interview"}
+Goal: maximize watch time + follows. The caption must be CLICKBAIT — curiosity, money, conflict, stakes.
+NEVER copy the transcript opening. NEVER start with So/And/Well/You know/Thank you.
+
+Series label to use when it fits: "${series}"
+Episode/source: ${input.sourceTitle?.trim() || "Shark Tank / entrepreneur interview"}
 Niche: ${input.niche?.trim() || "shark_tank_entrepreneurs"}
-Transcript excerpt:
-"""${transcript.slice(0, 900)}"""
 
-Rules:
-- hook = scroll-stopping first line (curiosity, stakes, money, or conflict). NOT a raw transcript dump.
-- Prefer formats like "Mark Cuban rule:", "Deal I'd take:", "Founder mistake:"
-- body = optional one short clarifying line
-- no emojis
-- 3 to 5 niche hashtags only (no #fyp #viral spam)
-- Do NOT include a follow CTA in hook/body (we add that separately)
+Transcript (for CONTEXT only — extract the drama, do not quote weakly):
+"""${transcript.slice(0, 1200)}"""
+
+Write:
+- hook: one scroll-stopping line (max ~90 chars). Prefer formats like:
+  "Mark Cuban rule: …"
+  "They wanted $X for Y% — then this happened."
+  "The Shark that said no just lost millions."
+  "Founder mistake: …"
+- body: optional second short line that raises stakes (max ~80 chars)
+- hashtags: 3-5 niche tags only (no #fyp #viral)
 
 Return JSON only: {"hook":"...","body":"...","hashtags":"#... #..."}`;
 
@@ -215,8 +224,8 @@ Return JSON only: {"hook":"...","body":"...","hashtags":"#... #..."}`;
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.85,
-          maxOutputTokens: 256,
+          temperature: 0.95,
+          maxOutputTokens: 280,
           responseMimeType: "application/json"
         }
       })

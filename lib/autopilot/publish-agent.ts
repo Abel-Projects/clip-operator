@@ -184,7 +184,7 @@ export async function claimNextSupoclipPublishJob(): Promise<PublishJob | null> 
 
     const caption = buildAutopilotCaption({
       title: claimed.caption_title ?? clipRow?.title,
-      description: claimed.caption_description ?? clipRow?.title
+      description: claimed.caption_description
     });
 
     return {

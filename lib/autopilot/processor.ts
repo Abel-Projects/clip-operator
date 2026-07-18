@@ -287,7 +287,7 @@ async function processDuePosts(
 
   const caption = buildAutopilotCaption({
     title: post.caption_title ?? clipRow?.title,
-    description: post.caption_description ?? clipRow?.title
+    description: post.caption_description
   });
 
   const provider = getClipProvider(campaign.clip_provider);
