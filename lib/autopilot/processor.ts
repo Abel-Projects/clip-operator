@@ -16,6 +16,7 @@ import {
   getDueScheduledPosts
 } from "@/lib/autopilot/scheduler";
 import { pruneLoserSources } from "@/lib/autopilot/source-performance";
+import { reinforceWinners } from "@/lib/autopilot/winner-loop";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { AutopilotSettingsRow, CampaignRow } from "@/lib/supabase/types";
 
@@ -489,6 +490,20 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
     } catch (error) {
       actions.push(
         `Source prune skipped: ${error instanceof Error ? error.message : "unknown error"}`
+      );
+    }
+
+    try {
+      const reinforced = await reinforceWinners(settings);
+      if (reinforced.winners > 0) {
+        const proxy = reinforced.usedProxyScores ? " (using clip scores until TikTok views sync)" : "";
+        actions.push(
+          `Growth: doubled down on ${reinforced.winners} winner(s)${proxy} → ${reinforced.suggestionsAdded} similar + ${reinforced.campaignsQueued} queued`
+        );
+      }
+    } catch (error) {
+      actions.push(
+        `Winner loop skipped: ${error instanceof Error ? error.message : "unknown error"}`
       );
     }
 
