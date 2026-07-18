@@ -14,6 +14,7 @@ type ConfigStatus = {
   canEmbed: boolean;
   backendReachable: boolean;
   frontendUrl: string;
+  embedUrl: string | null;
   baseUrl: string;
 };
 
@@ -107,18 +108,19 @@ export default function SupoClipEmbed() {
   }
 
   const frontendUrl = status?.frontendUrl ?? "";
+  const embedUrl = status?.embedUrl?.trim() || "";
   const brokenHost = !frontendUrl || isBrokenEmbedHost(frontendUrl);
-  const canEmbed = Boolean(status?.canEmbed) && !brokenHost;
+  const canEmbed = Boolean(status?.canEmbed) && !brokenHost && Boolean(embedUrl);
   const tailscaleUi =
     process.env.NEXT_PUBLIC_SUPOCLIP_TAILSCALE_URL?.trim() ||
-    "http://home-server.tailf72f6f.ts.net:3107";
+    "https://home-server.tailf72f6f.ts.net/list";
 
   return (
-    <SiteShell subtitle="SupoClip editor" back wide>
+    <SiteShell subtitle="SupoClip clips" back wide>
       <section className="opus-embed-panel">
         <p className="opus-hint">
-          SupoClip editor runs on the home server. Autopilot clipping does not need
-          this page — the outbound clip worker handles that.
+          Active generations from the home-server editor. Autopilot keeps clipping in the
+          background even if you never open this page.
         </p>
         {loadError ? (
           <div className="opus-alert" role="alert">
@@ -128,32 +130,22 @@ export default function SupoClipEmbed() {
 
         {!canEmbed ? (
           <div className="opus-panel" role="status">
-            <h2 style={{ margin: 0, fontSize: "1.15rem" }}>Open SupoClip on the home server</h2>
+            <h2 style={{ margin: 0, fontSize: "1.15rem" }}>Editor unavailable</h2>
             <p className="opus-hint" style={{ marginTop: "0.5rem" }}>
-              Vercel can&apos;t iframe a private Tailscale URL. Autopilot still clips without
-              this page — use this only when you want the manual editor.
+              Funnel URL or auth secret is missing, so the clips dashboard can&apos;t be
+              embedded yet.
             </p>
             <p style={{ marginTop: "1rem" }}>
               <a className="opus-secondary" href={tailscaleUi} target="_blank" rel="noreferrer">
-                Open SupoClip editor
+                Open clips list
               </a>
-            </p>
-            <p className="opus-hint" style={{ marginTop: "0.75rem" }}>
-              Needs Tailscale on this device →{" "}
-              <a className="opus-textlink" href={tailscaleUi} target="_blank" rel="noreferrer">
-                {tailscaleUi}
-              </a>
-            </p>
-            <p className="opus-hint" style={{ marginTop: "0.5rem" }}>
-              Local alternative: <code>deploy/start-dev.ps1</code>, then{" "}
-              <code>http://localhost:3107</code>.
             </p>
           </div>
         ) : (
           <iframe
             className="opus-embed-frame"
-            src={`${frontendUrl}${frontendUrl.includes("?") ? "&" : "?"}embed=1`}
-            title="SupoClip"
+            src={embedUrl}
+            title="SupoClip clips"
             allow="clipboard-read; clipboard-write"
           />
         )}

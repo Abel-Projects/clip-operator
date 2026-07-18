@@ -60,6 +60,8 @@ export type SupoClipIntegrationStatus = {
   backendReachable: boolean;
   baseUrl: string;
   frontendUrl: string;
+  /** Signed auto-login URL that lands on the clips list (no sign-in screen). */
+  embedUrl: string | null;
   hasTikTokAccount: boolean;
   tikTokAccountName?: string;
 };
@@ -313,6 +315,21 @@ function isPublicEmbedUrl(url: string): boolean {
   }
 }
 
+function buildEmbedLoginUrl(config: SupoClipConfig): string | null {
+  if (!config.authSecret || !isPublicEmbedUrl(config.frontendUrl)) {
+    return null;
+  }
+
+  const exp = Math.floor(Date.now() / 1000) + 10 * 60;
+  const payload = `${config.userId}:${exp}`;
+  const signature = createHmac("sha256", config.authSecret)
+    .update(payload)
+    .digest("hex");
+  const token = Buffer.from(`${payload}:${signature}`).toString("base64url");
+  const next = encodeURIComponent("/list?embed=1");
+  return `${config.frontendUrl}/api/embed/operator-session?token=${token}&next=${next}`;
+}
+
 export function getSupoClipStatus(): SupoClipIntegrationStatus {
   const config = getConfig();
   const hasEnv = Boolean(config);
@@ -325,6 +342,7 @@ export function getSupoClipStatus(): SupoClipIntegrationStatus {
     backendReachable: false,
     baseUrl: config?.baseUrl ?? DEFAULT_BASE_URL,
     frontendUrl,
+    embedUrl: config ? buildEmbedLoginUrl(config) : null,
     hasTikTokAccount: false
   };
 }
