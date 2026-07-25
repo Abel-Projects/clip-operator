@@ -53,9 +53,12 @@ export async function listPostsToPrune(limitOverride?: number): Promise<PruneJob
   }
 
   const jobs: PruneJob[] = [];
+  const seenVideos = new Set<string>();
   for (const row of data ?? []) {
     const videoId = videoIdFromTikTokUrl(row.tiktok_url);
     if (!videoId || !row.tiktok_url || row.views == null || !row.posted_at) continue;
+    if (seenVideos.has(videoId)) continue;
+    seenVideos.add(videoId);
     jobs.push({
       id: row.id,
       tiktokUrl: row.tiktok_url,
@@ -88,6 +91,10 @@ export async function markPostDeleted(
   if (!post) {
     return { ok: false, message: "Post not found." };
   }
+  if (post.status === "deleted") {
+    return { ok: true, message: result.message ?? "Already pruned." };
+  }
+
   if (post.status !== "posted") {
     return { ok: false, message: `Post is ${post.status}, not posted.` };
   }
