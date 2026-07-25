@@ -17,21 +17,20 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   max_source_duration_min: 150,
   auto_approve_sources: true,
   discovery_keywords: [
-    "shark tank us full pitch long",
-    "shark tank bidding wars full",
-    "shark tank young entrepreneurs full",
-    "mark cuban full podcast episode interview",
-    "barbara corcoran full podcast episode",
-    "kevin o'leary full length interview podcast",
-    "daymond john full podcast interview",
-    "how i built this entrepreneur full episode"
+    "shark tank abc full episode",
+    "shark tank us season full episode",
+    "shark tank season full episode pitch",
+    "shark tank mark cuban full episode",
+    "shark tank barbara corcoran full episode",
+    "shark tank kevin o'leary full episode",
+    "shark tank daymond john full episode",
+    "shark tank lori greiner full episode",
+    "shark tank bidding war full episode",
+    "shark tank young entrepreneur full episode"
   ],
-  discovery_channels: [
-    "UCREgA-BmOocJ9Is_bZV6aJQ",
-    "UCnnQ2f4XSGDzLkgBGbecBaA",
-    "UCnYMOamNKLGVlJgLtbb2JLA",
-    "UC6sS9qHuFKBRKW-bpdgLl_w"
-  ]
+  // Prefer keyword search over channels — official uploads are mostly short promos.
+  // Empty list = keywords only (US title gate still applies).
+  discovery_channels: [],
 };
 
 export async function getAutopilotSettings(): Promise<AutopilotSettingsRow> {

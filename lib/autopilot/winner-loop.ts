@@ -1,4 +1,5 @@
 import { countCampaignsCreatedToday } from "@/lib/autopilot/discovery";
+import { isUsSharkTankSource } from "@/lib/autopilot/niche-filter";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { AutopilotSettingsRow } from "@/lib/supabase/types";
 
@@ -35,7 +36,7 @@ function parseIso8601Duration(value: string): number {
   );
 }
 
-/** Turn a winning episode title into a YouTube search that finds more like it. */
+/** Turn a winning US Shark Tank episode into searches for more US episodes. */
 export function similarSearchQueries(title: string, channelTitle: string): string[] {
   const cleaned = title
     .replace(/#\w+/g, " ")
@@ -44,13 +45,6 @@ export function similarSearchQueries(title: string, channelTitle: string): strin
     .replace(/\s+/g, " ")
     .trim();
 
-  const queries: string[] = [];
-  if (channelTitle.trim()) {
-    queries.push(`${channelTitle} full episode`);
-    queries.push(`${channelTitle} shark tank`);
-  }
-
-  // Keep the most distinctive words (skip filler).
   const stop = new Set([
     "the",
     "a",
@@ -69,21 +63,32 @@ export function similarSearchQueries(title: string, channelTitle: string): strin
     "podcast",
     "official",
     "video",
-    "hd"
+    "hd",
+    "shark",
+    "tank"
   ]);
   const keywords = cleaned
     .split(/\s+/)
     .map((w) => w.replace(/[^a-zA-Z0-9']/g, ""))
     .filter((w) => w.length > 2 && !stop.has(w.toLowerCase()))
-    .slice(0, 6)
+    .slice(0, 5)
     .join(" ");
 
+  const queries: string[] = [
+    "shark tank abc full episode",
+    "shark tank us season full episode"
+  ];
+
   if (keywords) {
-    queries.push(`${keywords} full episode`);
-    queries.push(`${keywords} shark tank long`);
+    queries.push(`shark tank us ${keywords} full episode`);
+    queries.push(`shark tank ${keywords} season episode`);
   }
 
-  return [...new Set(queries)].slice(0, 3);
+  if (channelTitle.trim() && /shark\s*tank|abc/i.test(channelTitle)) {
+    queries.push(`${channelTitle} full episode`);
+  }
+
+  return [...new Set(queries)].slice(0, 4);
 }
 
 async function youtubeGet<T>(
@@ -112,6 +117,7 @@ async function searchSimilarIds(apiKey: string, query: string): Promise<string[]
     order: "relevance",
     videoDuration: "long",
     relevanceLanguage: "en",
+    regionCode: "US",
     safeSearch: "moderate"
   });
 
@@ -276,10 +282,26 @@ export async function reinforceWinners(
     return { winners: 0, suggestionsAdded: 0, campaignsQueued: 0, usedProxyScores: false };
   }
 
-  const winners = await findWinnerSources(
+  const winnersRaw = await findWinnerSources(
     MAX_WINNERS,
     settings.winner_min_views ?? DEFAULT_WINNER_MIN_VIEWS
   );
+  if (winnersRaw.length === 0) {
+    return { winners: 0, suggestionsAdded: 0, campaignsQueued: 0, usedProxyScores: false };
+  }
+
+  const winnerIds = winnersRaw
+    .map((w) => videoIdFromUrl(w.sourceUrl))
+    .filter((id): id is string => Boolean(id));
+  const winnerMeta = await fetchDetails(apiKey, winnerIds);
+  const winners = winnersRaw
+    .map((w) => {
+      const id = videoIdFromUrl(w.sourceUrl);
+      const meta = id ? winnerMeta.get(id) : undefined;
+      if (!meta) return w;
+      return { ...w, title: meta.title, channelTitle: meta.channelTitle };
+    })
+    .filter((w) => isUsSharkTankSource({ title: w.title, channelTitle: w.channelTitle }));
   if (winners.length === 0) {
     return { winners: 0, suggestionsAdded: 0, campaignsQueued: 0, usedProxyScores: false };
   }
@@ -314,6 +336,7 @@ export async function reinforceWinners(
     const meta = details.get(videoId);
     if (!meta) continue;
     if (meta.durationSec < minSec || meta.durationSec > maxSec) continue;
+    if (!isUsSharkTankSource({ title: meta.title, channelTitle: meta.channelTitle })) continue;
     const url = toVideoUrl(videoId);
     if (known.has(url)) continue;
     // Prefer mid-length episodes in the band (closer to 45–90m often = more pitches).

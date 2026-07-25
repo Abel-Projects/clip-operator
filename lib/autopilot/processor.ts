@@ -5,6 +5,7 @@ import {
   countCampaignsCreatedToday,
   discoverCandidates,
   discoverSourceVideo,
+  pruneOffNichePendingSuggestions,
   recordSuggestions
 } from "@/lib/autopilot/discovery";
 import { recoverStalePostingJobs } from "@/lib/autopilot/publish-agent";
@@ -365,6 +366,11 @@ async function maybeDiscoverAndQueue(
   }
 
   // Always refresh the suggestion queue so the user has things to vote on.
+  const pruned = await pruneOffNichePendingSuggestions();
+  if (pruned > 0) {
+    actions.push(`Discovery: rejected ${pruned} off-niche / non-US Shark Tank suggestion(s)`);
+  }
+
   const candidates = await discoverCandidates(settings, 12);
   const recorded = await recordSuggestions(candidates);
   if (recorded > 0) {

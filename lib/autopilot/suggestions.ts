@@ -1,4 +1,5 @@
 import { createCampaign } from "@/lib/autopilot/processor";
+import { isUsSharkTankSource, usSharkTankRejectReason } from "@/lib/autopilot/niche-filter";
 import { getAutopilotSettings } from "@/lib/autopilot/settings";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { ContentSuggestionRow } from "@/lib/supabase/types";
@@ -54,6 +55,27 @@ export async function voteSuggestion(
   }
 
   const settings = await getAutopilotSettings();
+  if (
+    !isUsSharkTankSource({
+      title: suggestion.title,
+      channelTitle: suggestion.channel_title
+    })
+  ) {
+    const reason =
+      usSharkTankRejectReason({
+        title: suggestion.title,
+        channelTitle: suggestion.channel_title
+      }) ?? "off niche";
+    await supabase
+      .from("content_suggestions")
+      .update({ status: "rejected", updated_at: new Date().toISOString() })
+      .eq("id", id);
+    return {
+      ok: false,
+      message: `Rejected — not US Shark Tank (${reason}).`
+    };
+  }
+
   await createCampaign({
     sourceUrl: suggestion.url,
     clipProvider: settings.clip_provider,

@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { AutopilotSettingsRow } from "@/lib/supabase/types";
+import { isUsSharkTankSource } from "@/lib/autopilot/niche-filter";
 
 export type DiscoveredVideo = {
   videoId: string;
@@ -94,32 +95,8 @@ async function fetchVideoDetails(
   return map;
 }
 
-function isUsableTitle(title: string): boolean {
-  const lower = title.toLowerCase();
-  const blocked = [
-    "shark tank best moments",
-    "funny moments",
-    "#shorts",
-    "#short",
-    " youtube shorts",
-    "youtube short",
-    "tiktok",
-    "reel",
-    "shorts:",
-    " | shorts",
-    "top 10",
-    "top 5",
-    "highlight reel",
-    "clip compilation",
-    "rejected pitches",
-    "shark tank clips",
-    "vertical video",
-    "one pitch from every episode"
-  ];
-  if (blocked.some((phrase) => lower.includes(phrase))) {
-    return false;
-  }
-  return true;
+function isUsableTitle(title: string, channelTitle = ""): boolean {
+  return isUsSharkTankSource({ title, channelTitle });
 }
 
 function durationWindow(settings: AutopilotSettingsRow): {
@@ -158,6 +135,7 @@ async function searchByKeyword(
     order: "date",
     videoDuration,
     relevanceLanguage: "en",
+    regionCode: "US",
     safeSearch: "moderate"
   });
 
@@ -271,7 +249,7 @@ export async function discoverCandidates(
     const meta = details.get(videoId);
     if (!meta) continue;
     if (!passesDurationFilter(meta.durationSec, minDurationSec, maxDurationSec)) continue;
-    if (!isUsableTitle(meta.title)) continue;
+    if (!isUsableTitle(meta.title, meta.channelTitle)) continue;
 
     results.push({
       videoId,
@@ -314,6 +292,41 @@ export async function recordSuggestions(
     .upsert(rows, { onConflict: "url", ignoreDuplicates: true });
 
   return error ? 0 : rows.length;
+}
+
+/** Reject pending suggestions that are not US Shark Tank (podcasts, foreign franchises, etc.). */
+export async function pruneOffNichePendingSuggestions(): Promise<number> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("content_suggestions")
+    .select("id, title, channel_title")
+    .eq("status", "pending")
+    .limit(500);
+
+  if (error || !data?.length) {
+    return 0;
+  }
+
+  const rejectIds = data
+    .filter(
+      (row) =>
+        !isUsSharkTankSource({
+          title: row.title,
+          channelTitle: row.channel_title
+        })
+    )
+    .map((row) => row.id);
+
+  if (rejectIds.length === 0) {
+    return 0;
+  }
+
+  const { error: updateError } = await supabase
+    .from("content_suggestions")
+    .update({ status: "rejected", updated_at: new Date().toISOString() })
+    .in("id", rejectIds);
+
+  return updateError ? 0 : rejectIds.length;
 }
 
 export async function countCampaignsCreatedToday(): Promise<number> {
