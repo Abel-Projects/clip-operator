@@ -145,6 +145,24 @@ def maybe_sync_metrics() -> None:
         print(f"Metrics sync error: {exc}", file=sys.stderr)
 
 
+def maybe_prune_profile() -> None:
+    """When idle, delete low-view posts so the public profile looks strong."""
+    import importlib.util
+
+    path = Path(__file__).resolve().parent / "prune-agent.py"
+    spec = importlib.util.spec_from_file_location("prune_agent", path)
+    if spec is None or spec.loader is None:
+        print("prune-agent.py not found; skipping profile prune.")
+        return
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    try:
+        module.run_once(force=False)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Profile prune error: {exc}", file=sys.stderr)
+
+
 def download_clip(project_id: str, clip_id: str, dest: Path) -> None:
     base = env("SUPOCLIP_BASE_URL", "http://localhost:8000").rstrip("/")
     url = f"{base}/tasks/{project_id}/clips/{clip_id}/file"
@@ -215,6 +233,7 @@ def run_once() -> bool:
     if not job:
         print("No due SupoClip publish jobs.")
         maybe_sync_metrics()
+        maybe_prune_profile()
         return False
 
     post_id = job["id"]

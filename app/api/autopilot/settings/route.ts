@@ -77,6 +77,18 @@ export async function PATCH(req: Request) {
   if (typeof body.winner_min_views === "number") {
     patch.winner_min_views = Math.min(1_000_000, Math.max(0, Math.floor(body.winner_min_views)));
   }
+  if (typeof body.profile_prune_enabled === "boolean") {
+    patch.profile_prune_enabled = body.profile_prune_enabled;
+  }
+  if (typeof body.profile_prune_max_views === "number") {
+    patch.profile_prune_max_views = Math.min(100_000, Math.max(0, Math.floor(body.profile_prune_max_views)));
+  }
+  if (typeof body.profile_prune_min_age_hours === "number") {
+    patch.profile_prune_min_age_hours = Math.min(24 * 30, Math.max(6, Math.floor(body.profile_prune_min_age_hours)));
+  }
+  if (typeof body.profile_prune_max_per_run === "number") {
+    patch.profile_prune_max_per_run = Math.min(20, Math.max(1, Math.floor(body.profile_prune_max_per_run)));
+  }
   if (typeof body.niche === "string") patch.niche = body.niche.trim();
   if (body.clip_provider === "wayinvideo" || body.clip_provider === "supoclip") {
     patch.clip_provider = body.clip_provider;

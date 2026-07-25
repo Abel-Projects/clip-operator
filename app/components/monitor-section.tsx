@@ -9,7 +9,7 @@ import {
   youtubeThumbnail
 } from "@/lib/format";
 
-export type PostStatus = "queued" | "posting" | "posted" | "failed";
+export type PostStatus = "queued" | "posting" | "posted" | "failed" | "deleted";
 
 export type MonitorPost = {
   id: string;
@@ -54,6 +54,8 @@ function statusClass(status: PostStatus, scheduledAt: string) {
       return "ok";
     case "failed":
       return "bad";
+    case "deleted":
+      return "";
     case "posting":
       return "active";
     case "queued":
@@ -71,6 +73,8 @@ function statusLabel(status: PostStatus, scheduledAt: string) {
       return "Publishing";
     case "failed":
       return "Failed";
+    case "deleted":
+      return "Pruned";
     case "queued":
       return new Date(scheduledAt).getTime() <= Date.now() ? "Due now" : "Queued";
     default:
@@ -81,6 +85,9 @@ function statusLabel(status: PostStatus, scheduledAt: string) {
 function whenLabel(post: MonitorPost): string {
   if (post.status === "posted" && post.postedAt) {
     return `Posted ${formatRelative(post.postedAt)}`;
+  }
+  if (post.status === "deleted") {
+    return `Pruned ${formatRelative(post.postedAt ?? post.scheduledAt)}`;
   }
   if (post.status === "posting") {
     return "Publishing to TikTok…";

@@ -6,7 +6,7 @@ export type CampaignStatus =
   | "done"
   | "failed";
 
-export type PostStatus = "queued" | "posting" | "posted" | "failed";
+export type PostStatus = "queued" | "posting" | "posted" | "failed" | "deleted";
 
 export type ClipProviderName = "wayinvideo" | "supoclip";
 
@@ -19,6 +19,10 @@ export type AutopilotSettingsRow = {
   min_hours_between_posts: number;
   min_clip_score: number;
   winner_min_views: number;
+  profile_prune_enabled: boolean;
+  profile_prune_max_views: number;
+  profile_prune_min_age_hours: number;
+  profile_prune_max_per_run: number;
   timezone: string;
   enabled: boolean;
   sources_per_day: number;
