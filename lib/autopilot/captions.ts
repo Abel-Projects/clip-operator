@@ -95,16 +95,17 @@ function fallbackTikTokCaption(
 
   const templates = [
     stake
-      ? `${series}: They asked for ${stake}. What happened next is wild.`
+      ? `${series}: They asked for ${stake}. You won't believe what the Sharks said.`
       : `${series}: The Sharks hated this pitch… until one number changed everything.`,
     stake
       ? `${series}: ${stake} on the line — and the founder almost walked.`
-      : `${series}: This founder said one sentence that flipped the whole room.`,
+      : `${series}: This one sentence flipped the whole room.`,
     `${series}: Don't make this mistake if you want a deal.`,
     `${series}: The offer was insane. Here's why it almost worked.`,
     stake
-      ? `${series}: ${stake} valuation — and Cuban wasn't buying it.`
-      : `${series}: Watch the Sharks fight over this deal.`
+      ? `${series}: ${stake} valuation — Cuban wasn't buying it.`
+      : `${series}: Watch the Sharks fight over this deal.`,
+    `${series}: Tease: the ask sounded crazy. The answer was worse.`
   ];
 
   const hook = templates[Math.abs(hashString(cleaned || series)) % templates.length]!;
@@ -192,26 +193,29 @@ export async function generateAutopilotCaption(input: {
   }
 
   const series = pickSeriesLabel(transcript);
-  const prompt = `You write viral TikTok captions for a Shark Tank / entrepreneur clip account.
+  const prompt = `You write viral TikTok captions for a US Shark Tank clip account.
 
-Goal: maximize watch time + follows. The caption must be CLICKBAIT — curiosity, money, conflict, stakes.
-NEVER copy the transcript opening. NEVER start with So/And/Well/You know/Thank you.
+Goal: maximize watch time + follows. Caption = CLICKBAIT that teases the ending (Freytag exposition).
+The viewer must feel suspense in the first line — foreshadow the conflict/money/deal without spoiling it.
+NEVER copy the transcript opening. NEVER start with So/And/Well/You know/Thank you/My name is.
+NEVER describe the clip flatly ("this influencer does X"). Bake curiosity instead.
 
 Series label to use when it fits: "${series}"
-Episode/source: ${input.sourceTitle?.trim() || "Shark Tank / entrepreneur interview"}
+Episode/source: ${input.sourceTitle?.trim() || "Shark Tank US episode"}
 Niche: ${input.niche?.trim() || "shark_tank_entrepreneurs"}
 
-Transcript (for CONTEXT only — extract the drama, do not quote weakly):
+Transcript (CONTEXT only — extract drama/stakes, do not quote weakly):
 """${transcript.slice(0, 1200)}"""
 
 Write:
-- hook: one scroll-stopping line (max ~90 chars). Prefer formats like:
+- hook: one scroll-stopping line (max ~90 chars). Prefer:
   "Mark Cuban rule: …"
   "They wanted $X for Y% — then this happened."
   "The Shark that said no just lost millions."
   "Founder mistake: …"
-- body: optional second short line that raises stakes (max ~80 chars)
-- hashtags: 3-5 niche tags only (no #fyp #viral)
+  "You wouldn't believe what stopped this deal."
+- body: optional second short line that raises stakes (max ~80 chars). Tease payoff; don't summarize the whole pitch.
+- hashtags: 3-5 niche tags only (no #fyp #viral). Prefer #sharktank #entrepreneur #business
 
 Return JSON only: {"hook":"...","body":"...","hashtags":"#... #..."}`;
 

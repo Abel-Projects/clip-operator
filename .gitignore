@@ -15,3 +15,6 @@ tsconfig.tsbuildinfo
 .env*
 !**/*.env.example
 deploy/home-server.env
+
+# Local research dumps (Discord exports, etc.) — keep off git
+research/
