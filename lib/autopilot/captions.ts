@@ -1,6 +1,7 @@
 const DEFAULT_HASHTAGS =
   "#sharktank #entrepreneur #businessadvice #startup #sidehustle";
-const GEMINI_MODEL = "gemini-2.0-flash-lite";
+const GEMINI_MODEL = "gemini-2.0-flash";
+const GROQ_MODEL_DEFAULT = "llama-3.3-70b-versatile";
 
 const SERIES_FORMATS = [
   "Shark Tank money lesson",
@@ -82,7 +83,7 @@ function moneyOrStakeHint(transcript: string): string | null {
 }
 
 /**
- * Clickbait fallback when Gemini is unavailable — never paste raw transcript.
+ * Template fallback when LLMs are unavailable — never paste raw transcript.
  */
 function fallbackTikTokCaption(
   transcript: string,
@@ -126,7 +127,6 @@ function looksLikeRawTranscript(hook: string): boolean {
   if (hook.length > 110) return true;
   if (/^(so|and|well|you know|uh|um|i mean)\b/i.test(hook)) return true;
   if (/\bspeaker\b/i.test(hook)) return true;
-  // Weak hooks that are clearly mid-conversation
   if (
     /^(thank you|thanks|hello|hi everyone|my name is|this is my)\b/i.test(lower)
   ) {
@@ -135,7 +135,7 @@ function looksLikeRawTranscript(hook: string): boolean {
   return false;
 }
 
-function parseGeminiCaption(
+function parseCaptionJson(
   text: string,
   includeCta: boolean,
   seed: string
@@ -167,6 +167,129 @@ function parseGeminiCaption(
   }
 }
 
+function buildCaptionPrompt(input: {
+  transcript: string;
+  sourceTitle?: string | null;
+  niche?: string | null;
+  series: string;
+}): string {
+  return `You write viral TikTok captions for a US Shark Tank clip account.
+
+Goal: maximize watch time + follows. Caption = CLICKBAIT that teases the ending (Freytag exposition).
+The viewer must feel suspense in the first line — foreshadow the conflict/money/deal without spoiling it.
+NEVER copy the transcript opening. NEVER start with So/And/Well/You know/Thank you/My name is.
+NEVER describe the clip flatly ("this influencer does X"). Bake curiosity instead.
+Sound human and punchy — not corporate, not spammy.
+
+Series label to use when it fits: "${input.series}"
+Episode/source: ${input.sourceTitle?.trim() || "Shark Tank US episode"}
+Niche: ${input.niche?.trim() || "shark_tank_entrepreneurs"}
+
+Transcript (CONTEXT only — extract drama/stakes, do not quote weakly):
+"""${input.transcript.slice(0, 1200)}"""
+
+Write:
+- hook: one scroll-stopping line (max ~90 chars). Prefer:
+  "Mark Cuban rule: …"
+  "They wanted $X for Y% — then this happened."
+  "The Shark that said no just lost millions."
+  "Founder mistake: …"
+  "You wouldn't believe what stopped this deal."
+- body: optional second short line that raises stakes (max ~80 chars). Tease payoff; don't summarize the whole pitch.
+- hashtags: 3-5 niche tags only (no #fyp #viral). Prefer #sharktank #entrepreneur #business
+
+Return JSON only: {"hook":"...","body":"...","hashtags":"#... #..."}`;
+}
+
+async function captionViaGroq(
+  prompt: string,
+  includeCta: boolean,
+  seed: string
+): Promise<{ title: string; description: string } | null> {
+  const apiKey = process.env.GROQ_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  const model =
+    process.env.GROQ_CAPTION_MODEL?.trim() || GROQ_MODEL_DEFAULT;
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.9,
+        max_tokens: 280,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write scroll-stopping TikTok caption hooks as JSON. Never copy transcript openers."
+          },
+          { role: "user", content: prompt }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const text = payload.choices?.[0]?.message?.content;
+    if (!text) return null;
+    return parseCaptionJson(text, includeCta, seed);
+  } catch {
+    return null;
+  }
+}
+
+async function captionViaGemini(
+  prompt: string,
+  includeCta: boolean,
+  seed: string
+): Promise<{ title: string; description: string } | null> {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.95,
+          maxOutputTokens: 280,
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+
+    const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return null;
+    return parseCaptionJson(text, includeCta, seed);
+  } catch {
+    return null;
+  }
+}
+
 export async function generateAutopilotCaption(input: {
   transcript: string;
   sourceTitle?: string | null;
@@ -187,70 +310,20 @@ export async function generateAutopilotCaption(input: {
     };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) {
-    return fallbackTikTokCaption(transcript, input.niche, includeCta);
-  }
-
   const series = pickSeriesLabel(transcript);
-  const prompt = `You write viral TikTok captions for a US Shark Tank clip account.
+  const prompt = buildCaptionPrompt({
+    transcript,
+    sourceTitle: input.sourceTitle,
+    niche: input.niche,
+    series
+  });
 
-Goal: maximize watch time + follows. Caption = CLICKBAIT that teases the ending (Freytag exposition).
-The viewer must feel suspense in the first line — foreshadow the conflict/money/deal without spoiling it.
-NEVER copy the transcript opening. NEVER start with So/And/Well/You know/Thank you/My name is.
-NEVER describe the clip flatly ("this influencer does X"). Bake curiosity instead.
+  // Prefer Groq (better short-form hooks on free tier); Gemini as backup.
+  const fromGroq = await captionViaGroq(prompt, includeCta, transcript);
+  if (fromGroq) return fromGroq;
 
-Series label to use when it fits: "${series}"
-Episode/source: ${input.sourceTitle?.trim() || "Shark Tank US episode"}
-Niche: ${input.niche?.trim() || "shark_tank_entrepreneurs"}
+  const fromGemini = await captionViaGemini(prompt, includeCta, transcript);
+  if (fromGemini) return fromGemini;
 
-Transcript (CONTEXT only — extract drama/stakes, do not quote weakly):
-"""${transcript.slice(0, 1200)}"""
-
-Write:
-- hook: one scroll-stopping line (max ~90 chars). Prefer:
-  "Mark Cuban rule: …"
-  "They wanted $X for Y% — then this happened."
-  "The Shark that said no just lost millions."
-  "Founder mistake: …"
-  "You wouldn't believe what stopped this deal."
-- body: optional second short line that raises stakes (max ~80 chars). Tease payoff; don't summarize the whole pitch.
-- hashtags: 3-5 niche tags only (no #fyp #viral). Prefer #sharktank #entrepreneur #business
-
-Return JSON only: {"hook":"...","body":"...","hashtags":"#... #..."}`;
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.95,
-          maxOutputTokens: 280,
-          responseMimeType: "application/json"
-        }
-      })
-    });
-
-    if (!response.ok) {
-      return fallbackTikTokCaption(transcript, input.niche, includeCta);
-    }
-
-    const payload = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-
-    const text = payload.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      return fallbackTikTokCaption(transcript, input.niche, includeCta);
-    }
-
-    const parsed = parseGeminiCaption(text, includeCta, transcript);
-    return parsed ?? fallbackTikTokCaption(transcript, input.niche, includeCta);
-  } catch {
-    return fallbackTikTokCaption(transcript, input.niche, includeCta);
-  }
+  return fallbackTikTokCaption(transcript, input.niche, includeCta);
 }
