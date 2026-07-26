@@ -120,11 +120,12 @@ def complete_job(campaign_id: str, body: dict) -> None:
 
 def pick_caption_template(campaign_id: str) -> str:
     """
-    A/B on-screen caption styles per campaign.
-    clear_bold = big white + thick black outline (primary)
-    hormozi = alternate experiment (green pill / uppercase)
+    On-screen caption style. Default: always clear_bold (same font/placement =
+    page brand). Set SUPOCLIP_CAPTION_AB=1 to 50/50 vs SUPOCLIP_CAPTION_TEMPLATE_B.
     """
     primary = env("SUPOCLIP_CAPTION_TEMPLATE", "clear_bold") or "clear_bold"
+    if env("SUPOCLIP_CAPTION_AB", "").strip() not in ("1", "true", "yes"):
+        return primary
     alternate = env("SUPOCLIP_CAPTION_TEMPLATE_B", "hormozi") or "hormozi"
     # Stable 50/50 split by campaign id (not every clip — one render pass per source).
     bucket = sum(ord(ch) for ch in campaign_id) % 2

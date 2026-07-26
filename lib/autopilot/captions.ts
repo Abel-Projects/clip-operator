@@ -1,5 +1,5 @@
-const DEFAULT_HASHTAGS =
-  "#sharktank #entrepreneur #businessadvice #startup #sidehustle";
+/** Clip Academy: keep to ~3 niche tags (no #fyp / #viral). */
+const DEFAULT_HASHTAGS = "#sharktank #entrepreneur #business";
 const GEMINI_MODEL = "gemini-2.0-flash";
 const GROQ_MODEL_DEFAULT = "llama-3.3-70b-versatile";
 
@@ -111,14 +111,9 @@ function fallbackTikTokCaption(
 
   const hook = templates[Math.abs(hashString(cleaned || series)) % templates.length]!;
 
-  const nicheTag = niche?.trim().replace(/\s+/g, "").toLowerCase();
-  const hashtags = nicheTag
-    ? `${DEFAULT_HASHTAGS} #${nicheTag.replace(/[^a-z0-9_]/gi, "")}`
-    : DEFAULT_HASHTAGS;
-
   return {
     title: withOptionalCta(hook, includeCta, cleaned || series),
-    description: hashtags
+    description: DEFAULT_HASHTAGS
   };
 }
 
@@ -196,9 +191,9 @@ Write:
   "Founder mistake: …"
   "You wouldn't believe what stopped this deal."
 - body: optional second short line that raises stakes (max ~80 chars). Tease payoff; don't summarize the whole pitch.
-- hashtags: 3-5 niche tags only (no #fyp #viral). Prefer #sharktank #entrepreneur #business
+- hashtags: exactly 3 niche tags (no #fyp #viral). Prefer #sharktank #entrepreneur #business
 
-Return JSON only: {"hook":"...","body":"...","hashtags":"#... #..."}`;
+Return JSON only: {"hook":"...","body":"...","hashtags":"#... #... #..."}`;
 }
 
 async function captionViaGroq(
