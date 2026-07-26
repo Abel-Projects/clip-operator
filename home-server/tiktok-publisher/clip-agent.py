@@ -118,7 +118,20 @@ def complete_job(campaign_id: str, body: dict) -> None:
     )
 
 
-def start_supoclip_task(source_url: str, title: str) -> str:
+def pick_caption_template(campaign_id: str) -> str:
+    """
+    A/B on-screen caption styles per campaign.
+    clear_bold = big white + thick black outline (primary)
+    hormozi = alternate experiment (green pill / uppercase)
+    """
+    primary = env("SUPOCLIP_CAPTION_TEMPLATE", "clear_bold") or "clear_bold"
+    alternate = env("SUPOCLIP_CAPTION_TEMPLATE_B", "hormozi") or "hormozi"
+    # Stable 50/50 split by campaign id (not every clip — one render pass per source).
+    bucket = sum(ord(ch) for ch in campaign_id) % 2
+    return primary if bucket == 0 else alternate
+
+
+def start_supoclip_task(source_url: str, title: str, *, caption_template: str) -> str:
     base = env("SUPOCLIP_BASE_URL", "http://localhost:8000").rstrip("/")
     payload = http_json(
         "POST",
@@ -126,6 +139,7 @@ def start_supoclip_task(source_url: str, title: str) -> str:
         body={
             "source": {"url": source_url, "title": title},
             "processing_mode": "fast",
+            "caption_template": caption_template,
         },
         headers=supoclip_auth_headers("application/json"),
         timeout=180,
@@ -189,7 +203,9 @@ def handle_start(job: dict) -> None:
     niche = job.get("niche") or "clip"
     print(f"Starting SupoClip for campaign {campaign_id}: {source_url}")
     try:
-        task_id = start_supoclip_task(source_url, niche)
+        template = pick_caption_template(campaign_id)
+        print(f"On-screen caption template: {template}")
+        task_id = start_supoclip_task(source_url, niche, caption_template=template)
         complete_job(campaign_id, {"action": "started", "projectId": task_id})
         print(f"Started task {task_id}")
     except Exception as exc:  # noqa: BLE001
