@@ -16,6 +16,7 @@ import {
   computeNextPostSlots,
   getDueScheduledPosts
 } from "@/lib/autopilot/scheduler";
+import { maybeQueueLessonPosts } from "@/lib/autopilot/lessons";
 import { pruneLoserSources } from "@/lib/autopilot/source-performance";
 import { reinforceWinners } from "@/lib/autopilot/winner-loop";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
@@ -516,6 +517,14 @@ export async function runAutopilotTick(): Promise<AutopilotTickResult> {
     }
 
     await maybeDiscoverAndQueue(settings, actions);
+
+    try {
+      await maybeQueueLessonPosts(settings, actions);
+    } catch (error) {
+      actions.push(
+        `Lesson queue skipped: ${error instanceof Error ? error.message : "unknown error"}`
+      );
+    }
 
     if (actions.length === 0) {
       actions.push("No work due");

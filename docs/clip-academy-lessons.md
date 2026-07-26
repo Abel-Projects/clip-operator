@@ -34,8 +34,16 @@ Sources mined: `editing-help.json`, `websites-and-tools.json`, `main-chat.json` 
 
 Repeated advice (esp. weezy / similar): find a pattern at **2–3/day**, drop to **1–2** if needed, and only increase when the account is consistently hitting. Live settings now sit at **7/day / 2h gap** as a middle ground vs the old 18/day flood.
 
+## On-niche narrated lessons
+
+Same Shark Tank page, different format (not a second niche):
+- `lesson_posts_enabled` (default on) + `lesson_posts_per_day` (default **1**)
+- Autopilot queues `content_type=lesson` posts → home-server `lesson-agent.py` (edge-tts + ffmpeg) → same TikTok publisher
+- Scripts stay Shark Tank / shark rules / founder money lessons only
+
 ## Still manual / later
 
 - First-frame / entrance animation (CapCut-style) — needs editor pipeline
 - Peak-hour learning from analytics
+- Richer lesson B-roll (Pexels) instead of solid-color cards
 - Optional light “uniqueness” transforms (mirror/speed/SFX) for hot late clips

@@ -39,6 +39,8 @@ export type PublishJob = {
   clipId: string;
   caption: string;
   scheduledAt: string;
+  contentType: "clip" | "lesson";
+  videoPath: string | null;
 };
 
 export function isPublishAgentAuthorized(req: Request): boolean {
@@ -147,7 +149,7 @@ export async function claimNextSupoclipPublishJob(): Promise<PublishJob | null> 
     .eq("campaigns.clip_provider", "supoclip")
     .lte("scheduled_at", now)
     .order("scheduled_at", { ascending: true })
-    .limit(5);
+    .limit(8);
 
   if (error) {
     throw new Error(error.message);
@@ -187,12 +189,26 @@ export async function claimNextSupoclipPublishJob(): Promise<PublishJob | null> 
       description: claimed.caption_description
     });
 
+    const contentType =
+      claimed.content_type === "lesson" ? ("lesson" as const) : ("clip" as const);
+    if (contentType === "lesson" && !claimed.local_video_path) {
+      // Not rendered yet — leave for lesson-agent; try next candidate.
+      await supabase
+        .from("scheduled_posts")
+        .update({ status: "rendering", error_message: "Waiting for lesson render." })
+        .eq("id", claimed.id)
+        .eq("status", "posting");
+      continue;
+    }
+
     return {
       id: claimed.id,
       projectId: claimed.provider_project_id,
       clipId: claimed.provider_clip_id,
       caption: formatTikTokCaption(caption),
-      scheduledAt: claimed.scheduled_at
+      scheduledAt: claimed.scheduled_at,
+      contentType,
+      videoPath: claimed.local_video_path ?? null
     };
   }
 

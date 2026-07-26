@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   profile_prune_max_views: 40,
   profile_prune_min_age_hours: 48,
   profile_prune_max_per_run: 5,
+  lesson_posts_enabled: true,
+  lesson_posts_per_day: 1,
   timezone: "America/New_York",
   enabled: true,
   sources_per_day: 6,

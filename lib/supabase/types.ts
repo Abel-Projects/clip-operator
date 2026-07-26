@@ -6,7 +6,15 @@ export type CampaignStatus =
   | "done"
   | "failed";
 
-export type PostStatus = "queued" | "posting" | "posted" | "failed" | "deleted";
+export type PostStatus =
+  | "queued"
+  | "rendering"
+  | "posting"
+  | "posted"
+  | "failed"
+  | "deleted";
+
+export type PostContentType = "clip" | "lesson";
 
 export type ClipProviderName = "wayinvideo" | "supoclip";
 
@@ -23,6 +31,8 @@ export type AutopilotSettingsRow = {
   profile_prune_max_views: number;
   profile_prune_min_age_hours: number;
   profile_prune_max_per_run: number;
+  lesson_posts_enabled: boolean;
+  lesson_posts_per_day: number;
   timezone: string;
   enabled: boolean;
   sources_per_day: number;
@@ -91,6 +101,8 @@ export type ScheduledPostRow = {
   scheduled_at: string;
   posted_at: string | null;
   status: PostStatus;
+  content_type: PostContentType;
+  local_video_path: string | null;
   caption_title: string | null;
   caption_description: string | null;
   error_message: string | null;

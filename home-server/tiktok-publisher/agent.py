@@ -163,6 +163,24 @@ def maybe_prune_profile() -> None:
         print(f"Profile prune error: {exc}", file=sys.stderr)
 
 
+def maybe_render_lessons() -> None:
+    """When idle, render queued narrated Shark Tank lesson videos."""
+    import importlib.util
+
+    path = Path(__file__).resolve().parent / "lesson-agent.py"
+    spec = importlib.util.spec_from_file_location("lesson_agent", path)
+    if spec is None or spec.loader is None:
+        print("lesson-agent.py not found; skipping lesson render.")
+        return
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    try:
+        module.run_once()
+    except Exception as exc:  # noqa: BLE001
+        print(f"Lesson render error: {exc}", file=sys.stderr)
+
+
 def download_clip(project_id: str, clip_id: str, dest: Path) -> None:
     base = env("SUPOCLIP_BASE_URL", "http://localhost:8000").rstrip("/")
     url = f"{base}/tasks/{project_id}/clips/{clip_id}/file"
@@ -232,6 +250,7 @@ def run_once() -> bool:
     job = claim_next_job()
     if not job:
         print("No due SupoClip publish jobs.")
+        maybe_render_lessons()
         maybe_sync_metrics()
         maybe_prune_profile()
         return False
@@ -240,12 +259,23 @@ def run_once() -> bool:
     project_id = job["projectId"]
     clip_id = job["clipId"]
     caption = job["caption"]
-    print(f"Claimed job {post_id} (task {project_id}, clip {clip_id})")
+    content_type = str(job.get("contentType") or "clip")
+    video_path = job.get("videoPath")
+    print(
+        f"Claimed job {post_id} ({content_type}; task {project_id}, clip {clip_id})"
+    )
 
     tmp = Path(tempfile.gettempdir()) / f"supoclip-{clip_id}.mp4"
     try:
-        download_clip(project_id, clip_id, tmp)
-        print(f"Downloaded clip ({tmp.stat().st_size // 1024} KB)")
+        if content_type == "lesson" and video_path:
+            src = Path(str(video_path))
+            if not src.is_file():
+                raise RuntimeError(f"Lesson video missing on disk: {src}")
+            tmp.write_bytes(src.read_bytes())
+            print(f"Loaded lesson video ({tmp.stat().st_size // 1024} KB)")
+        else:
+            download_clip(project_id, clip_id, tmp)
+            print(f"Downloaded clip ({tmp.stat().st_size // 1024} KB)")
         upload_to_tiktok(tmp, caption)
         complete_job(post_id, True, "Posted via home-server TikTok agent.")
         print(f"Posted to TikTok: {post_id}")

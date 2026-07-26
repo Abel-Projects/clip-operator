@@ -89,6 +89,12 @@ export async function PATCH(req: Request) {
   if (typeof body.profile_prune_max_per_run === "number") {
     patch.profile_prune_max_per_run = Math.min(20, Math.max(1, Math.floor(body.profile_prune_max_per_run)));
   }
+  if (typeof body.lesson_posts_enabled === "boolean") {
+    patch.lesson_posts_enabled = body.lesson_posts_enabled;
+  }
+  if (typeof body.lesson_posts_per_day === "number") {
+    patch.lesson_posts_per_day = Math.min(5, Math.max(0, Math.floor(body.lesson_posts_per_day)));
+  }
   if (typeof body.niche === "string") patch.niche = body.niche.trim();
   if (body.clip_provider === "wayinvideo" || body.clip_provider === "supoclip") {
     patch.clip_provider = body.clip_provider;
