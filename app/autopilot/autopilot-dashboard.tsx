@@ -48,6 +48,7 @@ type Settings = {
   min_hours_between_posts: number;
   sources_per_day: number;
   enabled: boolean;
+  wayinvideo_until_exhausted: boolean;
 };
 
 type Health = {
@@ -276,6 +277,19 @@ export default function AutopilotDashboard() {
     if (data.settings) setSettings(data.settings);
   }
 
+  async function toggleWayinVideoBurn() {
+    if (!settings) return;
+    const response = await authFetch("/api/autopilot/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wayinvideo_until_exhausted: !settings.wayinvideo_until_exhausted
+      })
+    });
+    const data = (await response.json()) as { settings?: Settings };
+    if (data.settings) setSettings(data.settings);
+  }
+
   async function voteSuggestion(id: string, vote: "up" | "down") {
     setVotingId(id);
     setErrorMessage("");
@@ -424,6 +438,36 @@ export default function AutopilotDashboard() {
         </div>
       </section>
 
+      {/* WayinVideo burn mode banner */}
+      {settings?.wayinvideo_until_exhausted ? (
+        <section className="opus-burn-banner">
+          <span className="opus-burn-icon">🔥</span>
+          <span className="opus-burn-text">
+            <strong>WayinVideo burn mode</strong> — using WayinVideo until credits run out, then auto-switching to SupoClip.
+          </span>
+          <button
+            type="button"
+            className="opus-secondary opus-burn-off"
+            onClick={toggleWayinVideoBurn}
+          >
+            Turn off
+          </button>
+        </section>
+      ) : isSupoclip ? (
+        <section className="opus-burn-banner opus-burn-off-state">
+          <span className="opus-burn-text">
+            Have WayinVideo credits to burn?
+          </span>
+          <button
+            type="button"
+            className="opus-secondary"
+            onClick={toggleWayinVideoBurn}
+          >
+            Use WayinVideo until exhausted
+          </button>
+        </section>
+      ) : null}
+
       {/* SupoClip pipeline — only shows work actually in SupoClip, not TikTok publishing */}
       <section className="opus-panel">
         <div className="opus-section-head">
@@ -503,8 +547,10 @@ export default function AutopilotDashboard() {
       {/* Add a video now */}
       <section className="opus-panel opus-addnow">
         <div>
-          <h3>Add a video now</h3>
-          <p className="opus-hint">Paste a YouTube link to jump the queue.</p>
+          <h3>Add a Shark Tank episode</h3>
+          <p className="opus-hint">
+            US Shark Tank full episodes only — podcasts and compilations are rejected.
+          </p>
         </div>
         <form className="opus-input-row" onSubmit={handleSubmit}>
           <input

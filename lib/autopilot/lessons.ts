@@ -183,7 +183,7 @@ export async function maybeQueueLessonPosts(
       .from("campaigns")
       .insert({
         source_url: `lesson://${lessonKey}`,
-        niche: settings.niche || "shark_tank_entrepreneurs",
+        niche: settings.niche || "us_shark_tank",
         clip_provider: "supoclip",
         provider_project_id: "lesson",
         status: "done",
@@ -319,7 +319,7 @@ export async function claimNextLessonRenderJob(): Promise<LessonRenderJob | null
       : hook;
     const onScreenLines = onScreenRaw
       .split("|")
-      .map((part) => part.trim())
+      .map((part: string) => part.trim())
       .filter(Boolean)
       .slice(0, 3);
 

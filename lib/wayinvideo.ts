@@ -76,7 +76,24 @@ export type WayinVideoProjectResult =
       mode: "mock" | "live";
       message: string;
       status?: number;
+      creditsExhausted?: boolean;
     };
+
+const CREDIT_EXHAUSTION_PATTERNS = [
+  /insufficient.*(?:api\s*)?units/i,
+  /not enough.*(?:api\s*)?units/i,
+  /(?:api\s*)?units.*(?:balance|empty|zero|exhausted)/i,
+  /quota.*exceeded/i,
+  /credits?.*(?:exhausted|empty|insufficient)/i,
+  /payment.*required/i,
+];
+
+export function isCreditsExhaustedError(message: string, status?: number): boolean {
+  if (status === 402) {
+    return true;
+  }
+  return CREDIT_EXHAUSTION_PATTERNS.some((pattern) => pattern.test(message));
+}
 
 export type WayinVideoClipsResult =
   | {
@@ -370,14 +387,16 @@ export async function createWayinVideoProject(
     }
 
     if (!response.ok) {
+      const message =
+        typeof payload === "string"
+          ? payload
+          : JSON.stringify(payload, null, 2);
       return {
         ok: false,
         mode: "live",
         status: response.status,
-        message:
-          typeof payload === "string"
-            ? payload
-            : JSON.stringify(payload, null, 2)
+        message,
+        creditsExhausted: isCreditsExhaustedError(message, response.status)
       };
     }
 

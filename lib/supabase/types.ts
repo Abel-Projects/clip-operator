@@ -41,6 +41,7 @@ export type AutopilotSettingsRow = {
   auto_approve_sources: boolean;
   discovery_keywords: string[] | unknown;
   discovery_channels: string[] | unknown;
+  wayinvideo_until_exhausted: boolean;
   updated_at: string;
 };
 
