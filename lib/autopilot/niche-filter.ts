@@ -111,7 +111,8 @@ const EPISODE_HINTS = [
   "episode ",
   " ep ",
   " ep.",
-  "pitch"
+  "pitch",
+  "shark tank us |"
 ];
 
 /** Guest appearances, podcasts, advice — not clipable Tank episodes. */
@@ -176,11 +177,12 @@ const OFF_NICHE = [
   "y combinator startup school"
 ];
 
-/** Channels that mostly upload compilations / dumps, not usable full episodes. */
-const CHANNEL_BLOCKLIST = [
-  "shark tank global",
-  "sony pictures television"
-];
+/**
+ * Channels that upload both compilations and single-pitch clips.
+ * Individual pitches from these channels are now allowed — the COMPILATION_BLOCKLIST
+ * and GUEST_OR_PODCAST filters catch the bad content by title patterns.
+ */
+const CHANNEL_BLOCKLIST: string[] = [];
 
 function normalize(text: string): string {
   return text
