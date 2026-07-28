@@ -42,7 +42,7 @@ async function countLessonsQueuedOrPostedToday(): Promise<number> {
     .from("scheduled_posts")
     .select("id", { count: "exact", head: true })
     .eq("content_type", "lesson")
-    .in("status", ["rendering", "queued", "posting", "posted"])
+    .in("status", ["queued", "posting", "posted"])
     .gte("scheduled_at", dayStart);
 
   if (error) {

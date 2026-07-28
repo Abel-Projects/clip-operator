@@ -65,7 +65,7 @@ export async function computeNextPostSlots(input: {
   const { data: existing, error } = await supabase
     .from("scheduled_posts")
     .select("scheduled_at, posted_at, status")
-    .in("status", ["queued", "rendering", "posting", "posted"])
+    .in("status", ["queued", "posting", "posted"])
     .order("scheduled_at", { ascending: false })
     .limit(200);
 
