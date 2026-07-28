@@ -114,6 +114,9 @@ export async function PATCH(req: Request) {
       (entry): entry is string => typeof entry === "string"
     );
   }
+  if (typeof body.wayinvideo_until_exhausted === "boolean") {
+    patch.wayinvideo_until_exhausted = body.wayinvideo_until_exhausted;
+  }
 
   try {
     const settings = await updateAutopilotSettings(patch);

@@ -1,6 +1,9 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import type { AutopilotSettingsRow } from "@/lib/supabase/types";
-import { isUsSharkTankSource } from "@/lib/autopilot/niche-filter";
+import {
+  isUsSharkTankSource,
+  usSharkTankRejectReason
+} from "@/lib/autopilot/niche-filter";
 
 export type DiscoveredVideo = {
   videoId: string;
@@ -61,6 +64,63 @@ async function youtubeGet<T>(
   }
 
   return (await response.json()) as T;
+}
+
+export function videoIdFromYoutubeUrl(url: string): string | null {
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = parsed.pathname.split("/").filter(Boolean)[0];
+      return id || null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      const v = parsed.searchParams.get("v");
+      if (v) return v;
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") {
+        return parts[1] ?? null;
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return trimmed.match(/[?&]v=([^&]+)/)?.[1] ?? null;
+}
+
+/** Reject non–US Shark Tank episode URLs before creating a campaign. */
+export async function assertUsSharkTankSourceUrl(sourceUrl: string): Promise<{
+  title: string;
+  channelTitle: string;
+}> {
+  const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("YOUTUBE_API_KEY is required to validate Shark Tank sources.");
+  }
+
+  const videoId = videoIdFromYoutubeUrl(sourceUrl);
+  if (!videoId) {
+    throw new Error("Need a valid YouTube watch URL.");
+  }
+
+  const details = await fetchVideoDetails(apiKey, [videoId]);
+  const meta = details.get(videoId);
+  if (!meta?.title) {
+    throw new Error("Could not load that YouTube video.");
+  }
+
+  const reason = usSharkTankRejectReason({
+    title: meta.title,
+    channelTitle: meta.channelTitle
+  });
+  if (reason) {
+    throw new Error(
+      `Only US Shark Tank full episodes are allowed (${reason}).`
+    );
+  }
+
+  return { title: meta.title, channelTitle: meta.channelTitle };
 }
 
 async function fetchVideoDetails(

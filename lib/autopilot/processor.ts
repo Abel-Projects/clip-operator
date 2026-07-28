@@ -2,6 +2,7 @@ import { buildAutopilotCaption, generateAutopilotCaption } from "@/lib/autopilot
 import { cleanupStaleFailedRecords } from "@/lib/autopilot/cleanup";
 import { selectGrowthClips } from "@/lib/autopilot/clip-quality";
 import {
+  assertUsSharkTankSourceUrl,
   countCampaignsCreatedToday,
   discoverCandidates,
   discoverSourceVideo,
@@ -10,7 +11,8 @@ import {
 } from "@/lib/autopilot/discovery";
 import { recoverStalePostingJobs } from "@/lib/autopilot/publish-agent";
 import { getClipProvider } from "@/lib/autopilot/providers";
-import { getAutopilotSettings } from "@/lib/autopilot/settings";
+import type { ClipProviderName } from "@/lib/autopilot/providers/types";
+import { getAutopilotSettings, updateAutopilotSettings } from "@/lib/autopilot/settings";
 import {
   canPostNow,
   computeNextPostSlots,
@@ -34,6 +36,20 @@ function providerLabel(campaign: CampaignRow): string {
   return campaign.clip_provider === "supoclip" ? "SupoClip" : "WayinVideo";
 }
 
+function getEffectiveClipProvider(settings: AutopilotSettingsRow): ClipProviderName {
+  if (settings.wayinvideo_until_exhausted) {
+    return "wayinvideo";
+  }
+  return settings.clip_provider;
+}
+
+async function disableWayinVideoUntilExhausted(actions: string[]): Promise<void> {
+  await updateAutopilotSettings({ wayinvideo_until_exhausted: false });
+  actions.push(
+    "WayinVideo credits exhausted — switched back to SupoClip for future campaigns"
+  );
+}
+
 async function failCampaign(campaignId: string, message: string) {
   const supabase = getSupabaseAdmin();
   await supabase
@@ -54,6 +70,25 @@ async function processPendingCampaign(
   });
 
   if (!project.ok) {
+    if (
+      project.creditsExhausted &&
+      settings.wayinvideo_until_exhausted &&
+      campaign.clip_provider === "wayinvideo"
+    ) {
+      await disableWayinVideoUntilExhausted(actions);
+
+      const supabase = getSupabaseAdmin();
+      await supabase
+        .from("campaigns")
+        .update({ clip_provider: "supoclip" })
+        .eq("id", campaign.id);
+
+      actions.push(
+        `Campaign ${campaign.id}: retrying with SupoClip after WayinVideo credit exhaustion`
+      );
+      return;
+    }
+
     await failCampaign(campaign.id, project.message);
     actions.push(
       `Campaign ${campaign.id}: failed to start ${provider.label} — ${project.message}`
@@ -399,7 +434,7 @@ async function maybeDiscoverAndQueue(
   await createCampaign({
     sourceUrl: discovered.url,
     clipProvider: settings.clip_provider,
-    niche: settings.niche ?? "shark_tank_entrepreneurs"
+    niche: settings.niche ?? "us_shark_tank"
   });
 
   actions.push(
@@ -548,12 +583,17 @@ export async function createCampaign(input: {
   const supabase = getSupabaseAdmin();
   const settings = await getAutopilotSettings();
 
+  await assertUsSharkTankSourceUrl(input.sourceUrl);
+
+  const effectiveProvider =
+    input.clipProvider ?? getEffectiveClipProvider(settings) ?? "supoclip";
+
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
       source_url: input.sourceUrl.trim(),
-      clip_provider: input.clipProvider ?? settings.clip_provider ?? "wayinvideo",
-      niche: input.niche ?? settings.niche ?? "shark_tank_entrepreneurs",
+      clip_provider: effectiveProvider,
+      niche: input.niche ?? settings.niche ?? "us_shark_tank",
       status: "pending"
     })
     .select("*")
