@@ -12,7 +12,7 @@ export type ProviderClip = {
 
 export type StartProjectResult =
   | { ok: true; projectId: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; creditsExhausted?: boolean };
 
 export type FetchClipsResult =
   | { ok: true; clips: ProviderClip[]; processing: boolean; status: string }

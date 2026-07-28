@@ -3,7 +3,7 @@ import type { AutopilotSettingsRow } from "@/lib/supabase/types";
 
 export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   id: 1,
-  niche: "shark_tank_entrepreneurs",
+  niche: "us_shark_tank",
   clip_provider: "supoclip",
   max_clips_per_source: 3,
   posts_per_day: 7,
@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS: Omit<AutopilotSettingsRow, "updated_at"> = {
   // Prefer keyword search over channels — official uploads are mostly short promos.
   // Empty list = keywords only (US title gate still applies).
   discovery_channels: [],
+  wayinvideo_until_exhausted: false,
 };
 
 export async function getAutopilotSettings(): Promise<AutopilotSettingsRow> {

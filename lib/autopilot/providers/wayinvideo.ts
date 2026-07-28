@@ -36,7 +36,11 @@ export const wayinvideoProvider: ClipProviderAdapter = {
     });
 
     if (!result.ok) {
-      return { ok: false, message: result.message };
+      return {
+        ok: false,
+        message: result.message,
+        creditsExhausted: result.creditsExhausted
+      };
     }
 
     return { ok: true, projectId: result.projectId };
